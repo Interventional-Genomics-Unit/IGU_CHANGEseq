@@ -1,3 +1,0 @@
-changeseq
-scripts
-test
