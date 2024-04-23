@@ -5,7 +5,11 @@
       <sourceFolder url="file://$MODULE_DIR$/changeseq" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/changeseq/changeseq" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Remote Python 2.7.15 (sftp://thudson@igi.biotite.berkeley.edu:22/home/thudson/miniconda3/envs/cseq/bin/python2.7) (2)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Remote Python 2.7.15 (sftp://thudson@igi.biotite.berkeley.edu:22/home/thudson/miniconda3/envs/cseq/bin/python2) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+  <component name="PyDocumentationSettings">
+    <option name="format" value="PLAIN" />
+    <option name="myDocStringFormat" value="Plain" />
   </component>
 </module>
