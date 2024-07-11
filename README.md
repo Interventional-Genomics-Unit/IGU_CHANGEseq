@@ -16,4 +16,11 @@
  conda env create -f cseq.yaml
  conda activate cseq
  ```
+
+In order to set up the annotation table for annotating OT sites run makefiles to download RefSeq annotations. Additional commands can change the location and FTP link (--outdir --ftp_path)
+
+```
+python /home/thudson/projects/IGU_CHANGEseq/changeseq/changeseq.py makefiles
+
+```
  
