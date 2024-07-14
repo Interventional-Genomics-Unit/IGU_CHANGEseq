@@ -23,6 +23,7 @@ from deduplicate import deduplicateReads
 from fastq_qc import fastqQC
 
 logger = log.createCustomLogger('root')
+global p_dir
 p_dir = os.path.dirname(os.path.realpath(__file__))
 
 class CircleSeq:
@@ -56,9 +57,16 @@ class CircleSeq:
             self.BWA_path  = manifest_data['bwa']
             self.reference_genome = manifest_data['reference_genome']
             self.analysis_folder = manifest_data['analysis_folder']
-            self.annotate_file = manifest_data['annotate_file']
             self.raw_fastq_folder = manifest_data['raw_fastq_folder']
             # Allow the user to specify read threshold, window_size and search_radius if they'd like
+            if os.path.isfile(p_dir + "/changeseq/data/paths.txt"):
+                self.annotate_file = open(p_dir + "/changeseq/data/paths.txt", "r").readlines()[0]
+            elif os.path.isfile(p_dir + "/data/paths.txt"):
+                self.annotate_file = open(p_dir + "/data/paths.txt", "r").readlines()[0]
+            else:
+                print("No Annotation file path found in /changeseq/data/paths.txt")
+                self.annotate_file = None
+
             if 'search_radius' in manifest_data:
                 self.search_radius = manifest_data['search_radius']
             if 'window_size' in manifest_data:
@@ -79,9 +87,16 @@ class CircleSeq:
                 self.all_chromosomes = manifest_data['all_chromosomes']
             if 'variant_analysis' in manifest_data:
                 self.variant_analysis = manifest_data['variant_analysis']
+            if 'read_length' in manifest_data:
+                self.read_length = manifest_data['read_length']
+            else:
+                self.read_length = 151
             if 'dedup_umi' in manifest_data:
                 self.dedup_umi = manifest_data['dedup_umi']
-                self.bc_pattern = manifest_data['bc_pattern']
+                if manifest_data['dedup_umi'] == True:
+                    self.bc_pattern = manifest_data['bc_pattern']
+                    self.read_length -= len(self.bc_pattern)
+
             if 'genome' in manifest_data:
                 self.genome = manifest_data['genome']
                 if self.genome in ['hg38','hg19']:
@@ -91,11 +106,7 @@ class CircleSeq:
                 self.PAM = manifest_data['PAM']
             else:
                 self.PAM = "NGG"
-            # Allow the user to specify Read Length. Yichao 4/29/2020
-            if 'read_length' in manifest_data:
-                self.read_length = manifest_data['read_length']
-            else:
-                self.read_length = 151
+
             # Allow the user to specify Read Count cutoff. Yichao 4/29/2020
             if 'read_count_cutoff' in manifest_data:
                 self.read_count_cutoff = manifest_data['read_count_cutoff']
@@ -113,7 +124,7 @@ class CircleSeq:
                 self.samples = {}
                 self.samples[sample] = manifest_data['samples'][sample]
             # Make folders for output
-            for folder in ['preprocessed','aligned', 'identified', 'fastq', 'visualization', 'variants']:
+            for folder in ['preprocessed','aligned', 'identified', 'fastq', 'visualization', 'variants','coverage']:
                 output_folder = os.path.join(self.analysis_folder, folder)
                 if not os.path.exists(output_folder):
                     os.makedirs(output_folder)
@@ -132,8 +143,6 @@ class CircleSeq:
 
         if self.dedup_umi:
             logger.info('Deduplicating UMIs...')
-
-            self.read_length -= len(self.bc_pattern)
 
             for sample in self.samples:
                 sample_processed_read1_path = os.path.join(self.analysis_folder, 'preprocessed', sample + '_R1_preprocessed.fastq.gz')
@@ -178,7 +187,6 @@ class CircleSeq:
                                                                     '_R1_preprocessed.fastq.gz')
                         control2 = os.path.join(self.analysis_folder, 'preprocessed', 'control_' +
                                                                     sample + '_R2_preprocessed.fastq.gz')
-
 
                     mergeReads(read1,
                                read2,
@@ -264,18 +272,36 @@ class CircleSeq:
         try:
             for sample in self.samples:
                  if sample != 'control':
-                     infile = os.path.join(self.analysis_folder, 'identified', sample + '_identified_matched.txt')
-                     annotate(infile, annotate_path=self.annotate_file)
-                     print("Annotating Sample;", sample)
+                     if self.annotate_file:
+                         infile = os.path.join(self.analysis_folder, 'identified', sample + '_identified_matched.txt')
+                         annotate(infile, annotate_path=self.annotate_file)
+                         print("Annotating Sample;", sample)
 
-                     outfile = os.path.join(self.analysis_folder, 'visualization', sample + '_offtargets')
-                     viz_infile = os.path.join(self.analysis_folder, 'identified', sample + '_identified_matched_annotated.csv')
-                     visualizeOfftargets(infile=viz_infile, outfile=outfile, title=sample, PAM=self.PAM, annotation=True)
+                         outfile = os.path.join(self.analysis_folder, 'visualization', sample + '_offtargets')
+                         viz_infile = os.path.join(self.analysis_folder, 'identified', sample + '_identified_matched_annotated.csv')
+                         visualizeOfftargets(infile=viz_infile, outfile=outfile, title=sample, PAM=self.PAM, annotation=True)
             logger.info('Finished visualizing off-target sites')
 
         except Exception as e:
             logger.error('Error visualizing off-target sites.')
             logger.error(traceback.format_exc())
+
+    def OTCoverage(self):
+        logger.info('QC Coverage')
+        try:
+            for sample in self.samples:
+                #if self.merged_analysis:
+                script_path = p_dir + "/QC_matched_alignment.sh"
+                logger.info('Running OT Coverage for {0}'.format(sample))
+                coverage_command = 'sh {0} {1} {2}'.format(script_path,
+                     sample, self.analysis_folder)
+                logger.info(coverage_command)
+                subprocess.check_call(coverage_command, shell=True)
+                logger.info('OT Coverage for {0} completed.'.format(sample))
+
+        except Exception as e:
+            logger.error('Error with OT coverage')
+
 
     def callVariants(self):
 
@@ -351,6 +377,16 @@ def parse_args():
     variants_parser.add_argument('--manifest', '-m', help='Specify the manifest Path', required=True)
     variants_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
+    variants_parser = subparsers.add_parser('coverage', help='Run coverage analysis of matched sites')
+    variants_parser.add_argument('--manifest', '-m', help='Specify the manifest Path', required=True)
+    variants_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
+
+    data_parser = subparsers.add_parser('makefiles', help='Combine and normalize replicates, produces vizualations')
+    data_parser.add_argument('--outdir', '-o', help='Specify the final annnotation table location. Default is changeseq directory', default=p_dir +"/data/")
+    data_parser.add_argument('--ftp_path', '-f', help='RefSeq FTP Path. Must be in refseq.txt format', default ="https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ncbiRefSeq.txt.gz")
+    data_parser.add_argument('--reset_output', '-r', help='Change path changeseq uses for stored annotation file',default = False)
+
+
     reference_free_parser = subparsers.add_parser('reference-free', help='Run reference-free discovery only')
     reference_free_parser.add_argument('--manifest', '-m', help='Specify the manifest Path', required=True)
     reference_free_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
@@ -362,11 +398,13 @@ def main():
 
     if args.command == 'all':
         c = CircleSeq()
+        print(args.sample)
         c.parseManifest(args.manifest, args.sample)
         c.processReads()
         c.alignReads()
         c.findCleavageSites()
         c.visualize()
+        c.OTCoverage()
         c.callVariants()
     elif args.command == 'parallel':
         c = CircleSeq()
@@ -392,6 +430,13 @@ def main():
         c = CircleSeq()
         c.parseManifest(args.manifest, args.sample)
         c.callVariants()
+    elif args.command == 'coverage':
+        c = CircleSeq()
+        c.parseManifest(args.manifest, args.sample)
+        c.OTCoverage()
+    elif args.command == 'makefiles':
+        from make_annotation_table import makefiles
+        makefiles(args.ftp_path,args.outdir,args.reset_output,p_dir)
 
 if __name__ == '__main__':
     main()

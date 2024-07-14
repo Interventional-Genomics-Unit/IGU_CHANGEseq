@@ -33,7 +33,6 @@ def parseSitesFile(infile):
     with open(infile, 'r') as f:
         f.readline()
         for line in f:
-
             line = line.rstrip('\n')
             if ',' in line:
                 line_items = line.split(',')
@@ -102,7 +101,7 @@ def find_PAM(seq,PAM):
     try:
         PAM_index = seq.index(PAM)
     except:# PAM on the left
-        # left_search = SeqUtils.nt_search(seq[:len(PAM)], PAM)
+        left_search = SeqUtils.nt_search(seq[:len(PAM)], PAM)
         if len(left_search)>1:
             PAM_index = left_search[1]
         else:

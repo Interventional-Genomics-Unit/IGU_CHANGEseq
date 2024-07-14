@@ -1,5 +1,4 @@
 from __future__ import print_function
-
 import subprocess
 import sys
 import os
@@ -25,9 +24,9 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
         for line in f:
             site = line.strip().split('\t')
             #  chromosome, windowStart, windowEnd, strand, bam, region_basename (=Targetsite_Name)
-            regions.append([site[0], int(site[6]) - search_radius, int(site[7]) + search_radius, '*', bam_file, '_'.join([site[26], site[3]])])
+            regions.append([site[0], int(site[1]) - search_radius, int(site[2]) + search_radius, '*', bam_file, site[15]])#'_'.join([site[26], site[3]])])
 
-    print('Running samtools:mpileup for %s' % basename, file=sys.stderr)
+    print('Running samtools:mpileup for %s' % basename) #, file=sys.stderr)
     out_vcf = os.path.join(output_folder, basename + '_mpileup_output')
     if os.path.exists(out_vcf):
         subprocess.check_call('rm -r %s' % out_vcf, shell=True, env=os.environ.copy())
@@ -39,36 +38,38 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
         region = '%s%s%s%s%s' % (chromosome, ":", int(windowStart), "-", int(windowEnd))
         output = os.path.join(out_vcf, region_basename + '.vcf')
 
-        cl_vcf = 'samtools mpileup -v --region %s --fasta-ref %s %s > %s' % (region, reference, bam_file, output)
+        cl_vcf = "bcftools mpileup --region %s --fasta-ref %s %s | bcftools call -cv -O -o %s" % (region, reference, bam_file, output)
+
+        #cl_vcf = 'samtools mpileup -v --region %s --fasta-ref %s %s > %s' % (region, reference, bam_file, output)
         subprocess.check_call(cl_vcf, shell=True, env=os.environ.copy(), stderr=process_mpileup, stdout=process_mpileup)
     process_mpileup.close()
 
-    print('Collecting variants for %s' % basename, file=sys.stderr)
-    out_bcf = os.path.join(output_folder, basename + '_output_bcftools')
-    if os.path.exists(out_bcf):
-        subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
-    os.makedirs(out_bcf)
-    process_bcftools = open(os.path.join(out_bcf, 'logFile_bcftools'), 'w')
+    #print('Collecting variants for %s' % basename)#, file=sys.stderr)
+    #out_bcf = os.path.join(output_folder, basename + '_output_bcftools')
+    #if os.path.exists(out_bcf):
+    #    subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
+    #os.makedirs(out_bcf)
+    # process_bcftools = open(os.path.join(out_bcf, 'logFile_bcftools'), 'w')
 
     vcf_files = [f for f in os.listdir(out_vcf) if os.path.isfile(os.path.join(out_vcf, f))]
-    for arch in vcf_files:
-        if not arch.startswith('.') and arch.endswith('.vcf'):
-            name = arch[:-4]
-            output = os.path.join(out_bcf, name + '_BCFcall.vcf')
+    #for arch in vcf_files:
+    #    if not arch.startswith('.') and arch.endswith('.vcf'):
+    #        name = arch[:-4]
+    #        output = os.path.join(out_bcf, name + '_BCFcall.vcf')
+    #
+    #        cl_bcf = 'bcftools call -v -c %s > %s' % (os.path.join(out_vcf, arch), output)
+    #        subprocess.check_call(cl_bcf, shell=True, env=os.environ.copy(), stderr=process_bcftools, stdout=process_bcftools)
+    #process_bcftools.close()
 
-            cl_bcf = 'bcftools call -v -c %s > %s' % (os.path.join(out_vcf, arch), output)
-            subprocess.check_call(cl_bcf, shell=True, env=os.environ.copy(), stderr=process_bcftools, stdout=process_bcftools)
-    process_bcftools.close()
-
-    print('Collecting significant variant calls for %s' % basename, file=sys.stderr)
+    print('Collecting significant variant calls for %s' % basename) #, file=sys.stderr)
     out_svc = os.path.join(output_folder, basename + '_output_svc')
     if os.path.exists(out_svc):
         subprocess.check_call('rm -r %s' % out_svc, shell=True, env=os.environ.copy())
     os.makedirs(out_svc)
     process_svc = open(os.path.join(out_svc, 'logFile_svc'), 'w')
 
-    bcf_files = [f for f in os.listdir(out_bcf) if os.path.isfile(os.path.join(out_bcf, f))]
-    for arch in bcf_files:
+    #bcf_files = [f for f in os.listdir(out_bcf) if os.path.isfile(os.path.join(out_bcf, f))]
+    for arch in vcf_files:
         if not arch.startswith('.') and arch.endswith('.vcf'):
             name = arch[:-12]
             output = os.path.join(out_svc, name + '_SIGNFcall.txt')
@@ -77,7 +78,7 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
             subprocess.check_call(cl_sed, shell=True, env=os.environ.copy(), stderr=process_svc, stdout=process_svc)
     process_svc.close()
 
-    print('Consolidating all the significant variant calls for %s' % basename, file=sys.stderr)
+    print('Consolidating all the significant variant calls for %s' % basename) #, file=sys.stderr)
     header = ['targetsite', 'site_name', 'chromosome', 'one_based_position', 'reference', 'variant', 'quality', 'genotype', 'depth', 'PL']
     variants = list()
 
@@ -101,17 +102,17 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
                         [item[7].split(';')[0][3:]] + ['_'.join(item[9][4:].split(','))])
 
     out_file = open(out + '_mpileupCall.txt', 'w')
-    print(*header, sep='\t', file=out_file)
+    print('\t'.join(header), file=out_file)
     for item in variants:
-        print(*item, sep='\t', file=out_file)
+        print('\t'.join(item),file=out_file)
     out_file.close()
 
-    print('Cleaning up directive for %s' % basename, file=sys.stderr)
-    subprocess.check_call('rm -r %s' % out_vcf, shell=True, env=os.environ.copy())
-    subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
-    subprocess.check_call('rm -r %s' % out_svc, shell=True, env=os.environ.copy())
+    #print('Cleaning up directive for %s' % basename, file=sys.stderr)
+    #subprocess.check_call('rm -r %s' % out_vcf, shell=True, env=os.environ.copy())
+    #subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
+    #subprocess.check_call('rm -r %s' % out_svc, shell=True, env=os.environ.copy())
 
-    print('Done running samtools:mpileup for %s' % basename, file=sys.stderr)
+    print('Done running samtools:mpileup for %s' % basename) #, file=sys.stderr)
     return variants
 
 

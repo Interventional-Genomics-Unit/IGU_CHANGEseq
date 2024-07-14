@@ -112,6 +112,7 @@ class Transcript:
         os.remove(temp_bedfname)
     def __dict__(self):
         return self.entry
+
     def get_utrs(self):
         exon_starts = self.entry['exonStarts'][:-1].split(',')
         exon_ends = self.entry['exonEnds'][:-1].split(',')
@@ -262,12 +263,14 @@ def annotate(identify_file, annotate_path):
     Feature,Gene_Name,Distance  = list(), list(), list()
     for coord in coords:
         tx = Transcript.transcript(coord)
+
         if tx == 'intergenic':
             Feature.append('intergenic')
             Gene_Name.append('-')
         else:
             Feature.append(tx.feature)
             Gene_Name.append(tx.tx_info()[2])
+            print(tx.feature)
 
     res_data['Gene_Name'] = Gene_Name
     #res_data['Gene_Type'] = Gene_Type
@@ -281,7 +284,10 @@ def annotate(identify_file, annotate_path):
 
 
 ##set input
-#data_dir = '/groups/clinical/projects/Assay_Dev/IGU_CHANGEseq/CASAFE/identified/'
-#annot_dir = '/groups/clinical/projects/clinical_shared_data/hg38/annotations/'
-#identify_files = [data_dir + x for x in os.listdir(data_dir) if x.endswith('_matched.txt')]
-#annotate_path = '/groups/clinical/projects/editability/tables/processed_tables/ncbiRefSeq.bed.gz'
+
+# data_dir =os.path.dirname(os.path.realpath(__file__)) +"/changeseq/test/data/MergedOutput/identified/"
+# annot_dir = '/groups/clinical/projects/clinical_shared_data/hg38/annotations/'
+# data_dir = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_06/identified/"
+# annotate_path = '/groups/clinical/projects/editability/tables/processed_tables/ncbiRefSeq.bed.gz'
+#  identify_files = [data_dir + x for x in os.listdir(data_dir) if x.endswith('_matched.txt')]
+# identify_file = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_06/identified/spCas9_78_VEGFA_R2_identified_matched.txt"
