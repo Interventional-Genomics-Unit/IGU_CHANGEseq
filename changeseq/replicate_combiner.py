@@ -152,12 +152,20 @@ def vennplot_replicates(joined,sample1,sample2,figout):
 
 
 
-def repCombiner(sample1,sample2,name,analysis_folder,read_threshold = 6):
+def repCombiner(sample1,sample2,file1,file2,name,analysis_folder,read_threshold = 6):
     ## Inputs
-    sample1 = "spCas9_WT_ADA_1545_r1"
-    sample2 =  "spCas9_WT_ADA_1545_r2"
-    analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_05/12878/unmerged/'
-    name = "NA12878 spCas9 ADA 1545+"  # for labeling
+    # sample1 = "spCas9_WT_ADA_1545_r1"
+    # sample2 =  "spCas9_WT_ADA_1545_r2"
+    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_05/12878/unmerged/'
+    # name = "NA12878 spCas9 ADA 1545+"  # for labeling
+    # file1 = analysis_folder+ 'identified/'+ sample1 + '_identified_matched_annotated.csv'
+    # file2 = analysis_folder+ 'identified/'+ sample2 + '_identified_matched_annotated.csv'
+
+    ##  Inputs
+    sample1_identified_file = file1
+    sample2_identified_file = file2
+
+
     ## Outputs
     joined_out = os.path.join(analysis_folder, 'identified', sample1) + 'JOINED_RAW' + sample2 + '.csv'
     joined_normalized_out = os.path.join(analysis_folder, 'identified',sample1) + 'JOINED_NORMALIZED' + sample2 + '.csv'
@@ -169,8 +177,6 @@ def repCombiner(sample1,sample2,name,analysis_folder,read_threshold = 6):
     swarm_out = analysis_folder + 'visualization/' + name.replace(" ", "_") + "_replicate_swarmplot.png"
 
     # Join without normalizing
-    sample1_identified_file = analysis_folder+ 'identified/'+ sample1 + '_identified_matched_annotated.csv'
-    sample2_identified_file = analysis_folder+ 'identified/'+ sample2 + '_identified_matched_annotated.csv'
     print("Joining...")
     print(sample1_identified_file)
     print("with")
@@ -184,7 +190,6 @@ def repCombiner(sample1,sample2,name,analysis_folder,read_threshold = 6):
     sim = vennplot_replicates(joined, sample1, sample2, venn_out_without_normalize)
     print(sim)
 
-
     joined_normalized = normalize(joined, threshold=read_threshold)
     joined_normalized.to_csv(joined_normalized_out, index=False)
 
@@ -193,7 +198,6 @@ def repCombiner(sample1,sample2,name,analysis_folder,read_threshold = 6):
     print(sim)
 
     x1, x2 = list(joined_normalized['Nuclease_Read_Count.Rep1']), list(joined_normalized['Nuclease_Read_Count.Rep2'])
-
 
     scatter_plot(x1, x2, name, scatter_out)
     swarm_plot(x1, x2, name, swarm_out)
@@ -222,23 +226,24 @@ out = os.path.join(analysis_folder, 'identified',
 df2[~df2['DNA'].isna()]   
     
 '''
-def combineReplicates(self, rep_sample1, rep_sample2, name, read_threshold):
-    logger.info('combine replicates')
-    try:
-        logger.info('Running replicate combined for {0} {1}'.format(rep_sample1, rep_sample2))
-        replicate_combiner.repCombiner(rep_sample1, rep_sample2, name, self.analysis_folder, read_threshold)
-
-    except Exception as e:
-        logger.error('Error combined replicates')
 
 
-def main():
+def parse_args():
     mainParser = argparse.ArgumentParser()
-
-    mainParser.add_argument('--manifest', '-m', help='Specify the manifest Path', required=True)
-    mainParser.add_argument('--rep_sample1', '-s1', help='name of replicate 1. matches sample in manifest')
-    mainParser.add_argument('--rep_sample2', '-s2', help='name of replicate 2. matches sample in manifest')
+    mainParser.add_argument('--sample1', '-s1', help='name of sample 1. matches sample in manifest')
+    mainParser.add_argument('--sample2', '-s2', help='name of sample 2. matches sample in manifest')
+    mainParser.add_argument('--file1', '-f1', help='absolute path of sample1 identified_annotated.csv file')
+    mainParser.add_argument('--file2', '-f2', help= 'absolute path of sample2 identified_annotated.csv file')
+    mainParser.add_argument('--output', '-o', help='output directory')
     mainParser.add_argument('--name', '-n', help='Sample name for labeling graphs')
     mainParser.add_argument('--read_threshold', '-rt', help='limit sample combining to a min read count threshold',default =6)
 
+    return mainParser.parse_args()
 
+
+def main():
+    args = parse_args()
+    try:
+        repCombiner(args.sample1, args.sample2, args.file1, args.file2, args.name, args.output, args.read_threshold)
+    except Exception as e:
+        print('Error combined replicates')

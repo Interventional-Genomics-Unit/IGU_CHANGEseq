@@ -32,34 +32,29 @@ In order to set up the annotation table for annotating OT sites run makefiles to
 
 ```
 python /home/thudson/projects/IGU_CHANGEseq/changeseq/changeseq.py makefiles
-
 ```
  
 # Usage
 
-The change-seq pipeline requires a manifest yaml file specifying input files, output directory, and pipeline parameters. this file is created using two csv files. One is specfic to paramters and the other are the input paramters. Once the csv files are created, users can simply run the change-seq wrapper 
+The Tsai lab change-seq pipeline requires a manifest yaml file specifying input files, output directory, and pipeline parameters. In the IGU version this file is created using two csv files 1) A Parameters file 2) A list of Samples and Controls file. Once the csv files are created, users can simply run the change-seq wrapper as shown below. 
+
+
+The bash wrapper is initiated with the parameters.csv, manifest.csv, command, and sample_name
 
 ```
-cd IGU_CHANGEseq/changeseq/
-bash CHANGEseq_wrapper.sh test/parameters.csv test/manifest.csv all all
-
+cd IGU_CHANGEseq/changeseq/test
+bash path-to/CHANGEseq_wrapper.sh merged_parameters.csv manifest.csv all all
 ```
-
-
-## Example Output
-
 
 # Writing A Manifest File
 When running the end-to-end analysis functionality of the CHANGEseq package a number of inputs are required. To simplify the formatting of these inputs and to encourage reproducibility, these parameters are inputted into the pipeline via a manifest. This first manifest.csv sample takes into the 
 
 
-    - For each sample, you must provide the following parameters:
-        - `target`: Target sequence for that sample. Accepts degenerate bases.
-        - `read1`: The absolute path to the .FASTQ(.gz) file containing the read1 reads.
-        - `read2`: The absolute path to the .FASTQ(.gz) file containing the read2 reads.
-        - `controlread1`: The absolute path to the .FASTQ(.gz) file containing the control read1 reads.
-        - `controlread2`: The absolute path to the .FASTQ(.gz) file containing the control read2 reads.
-        - `description`: A brief description of the sample
+- `sequencing_sample_name`: sample name as indicated in the raw fastq (Leave out the ("_S[#]_R1_001")
+- `sample_name`: The sample name as you wish to see on the output file names  
+- `control_sequencing_sample_name`: No RNP control sample name as indicated in the raw fastq (Leave out the ("_S[#]_R1_001")
+- `target`: Target sequence for that sample. Accepts degenerate bases.
+- `description`: A brief description of the sample. Typically the cell or gDNA Source name
      
 
  # Writing A Parameters File
@@ -67,7 +62,7 @@ When running the end-to-end analysis functionality of the CHANGEseq package a nu
 
 - `reference_genome`: The absolute path to the reference genome FASTA file.
 - `analysis_folder`: The absolute path to the folder in which all pipeline outputs will be saved.
-- 'raw_fastq_folder':The absolute path to the folder in which all raw fastq files are stored.
+- `raw_fastq_folder`:The absolute path to the folder in which all raw fastq files are stored.
 - `bwa`: The absolute path to the `bwa` executable
 - `samtools`: The absolute path to the `samtools` executable
 - `read_threshold`: The minimum number of reads at a location for that location to be called as a site. We recommend leaving it to the default value of 4.
@@ -80,13 +75,33 @@ When running the end-to-end analysis functionality of the CHANGEseq package a nu
 - `PAM`: PAM sequence, default is NGG.
 - `genome`: used for homer peak annotation, e.g., hg19, hg38, mm9, or mm10.
 - `merged_analysis`: Whether or not the paired read merging step should takingTrue
-- 'dedup_umi': Whether or not the dedupliucation of UMIs step should takingTrue or False
-- 'bc_pattern': If umi deduplication is taking place, which barcode pattern should be given to UMI tools
+- `dedup_umi`: Whether or not the dedupliucation of UMIs step should takingTrue or False
+- `bc_pattern`: If umi deduplication is taking place, which barcode pattern should be given to UMI tools
+
+# Commands
+
+ Pipeline commands (must be run alongside samples command)
+
+- `all`: runs all of the pipelines
+- `align`: merges (if indicated in parameters.csv) and aligns reads to ref genome
+- `identify`: identifies nominated off-target sites
+- `visualize`:annotates identified sites and creates alignment .svg image
+- `coverage`: create .bam file, alignment histogram and stats file for the identified sites
+- `variants`: *currently* updating 
+
+### Samples
+
+- `all`: runs all samples in manifest
+- `sample_name`: runs the specific sample indicated
+
+### Stand alone scripts
+
+These are run in the python terminal
+
+`python replicate_combiner.py `: *currently* updating
+
 
 # Pipeline Output
 When running the full pipeline, the results of each step are outputted to the `output_folder` in a separate folder for each step. The output folders and their respective contents are as follows:
 
-- `output_folder/aligned`: Contains an alignment `.sam`, alignment `.bam`, sorted `bam`, and `.bai` index file for each sample.
-- `output_folder/fastq`: Merged `.fastq.gz` files for each sample.
-- `output_folder/identified`: Contains tab-delimited `.txt` files for each sample containing the identified DSBs, control DSBs, filtered DSBs, and read quantification.
-- `output_folder/visualization`: Contains a `.svg` vector image representing an alignment of all detected off-targets to the targetsite for each sample.
+.....
