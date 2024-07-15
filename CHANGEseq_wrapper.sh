@@ -1,16 +1,12 @@
 #!/bin/bash
-#SBATCH -p standard
 #SBATCH --job-name IGU_CHANGEseq
 #SBATCH -o %j.out
 #SBATCH -e %j.err
 
 ## ACTIVATE CONDA
 eval "$(conda shell.bash hook)"
-conda activate cseq3
+conda activate cseq
 
-pwd=$(pwd)
-## PERMISSIONS
-chmod -R 775 $pwd
 
 echo "parameters manifest(csv): $1"
 echo "samples manifest(csv): $2"
