@@ -1,0 +1,16 @@
+reference_genome,data/input/CIRCLEseq_test_genome.fa
+analysis_folder,data/MergedOutput/
+raw_fastq_folder,data/input/
+bwa,bwa
+samtools,samtools
+read_threshold,6
+window_size,3
+mapq_threshold,50
+start_threshold,1
+gap_threshold,3
+mismatch_threshold,6
+search_radius,30
+merged_analysis,TRUE
+variant_analysis,FALSE
+dedup_umi,FALSE
+bc_pattern,None

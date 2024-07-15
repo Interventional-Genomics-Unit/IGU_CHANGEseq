@@ -50,7 +50,7 @@ def write_path(file,output):
 
 
 def makefiles(ftp_path,outdir,reset_output,p_dir):
-    file = outdir + "\paths.txt" ## for writing paths
+    file = outdir + "paths.txt" ## for writing paths
 
     if reset_output:
         print("Reseting changeseqs annotation file to "+ reset_output)

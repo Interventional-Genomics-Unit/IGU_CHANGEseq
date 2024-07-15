@@ -1,0 +1,47 @@
+# Config file for automatic testing at travis-ci.org
+
+language: python
+
+python:
+  - "2.7"
+
+before_install:
+  - cd test
+  - git clone https://github.com/lh3/bwa.git
+  - cd bwa
+  - git checkout tags/v0.7.13
+  - make
+  - cd ..
+  - PATH=`pwd`/bwa:$PATH
+  - git clone https://github.com/samtools/htslib.git
+  - cd htslib
+  - git checkout tags/1.3
+  - make
+  - cd ..
+  - git clone https://github.com/samtools/samtools.git
+  - cd samtools
+  - git checkout tags/1.3
+  - make
+  - cd ..
+  - PATH=`pwd`/samtools:$PATH
+  - cd ..
+  - git clone git://github.com/samtools/htslib.git
+  - cd htslib
+  - git checkout tags/1.7
+  - cd ..
+  - git clone git://github.com/samtools/bcftools.git
+  - cd bcftools
+  - git checkout tags/1.6
+  - make
+  - cd ..
+  - PATH=`pwd`/bcftools:$PATH
+
+# command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
+install:
+  - pip install --upgrade pip setuptools wheel
+  - pip install --only-binary=numpy,scipy numpy scipy
+  - pip install -r requirements.txt
+
+# command to run tests, e.g. python setup.py test
+script:
+    cd test && nosetests --exe -v
