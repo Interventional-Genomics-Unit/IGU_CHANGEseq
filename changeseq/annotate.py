@@ -1,16 +1,18 @@
 from subprocess import Popen, PIPE
+import subprocess
 import os
 from Bio.Seq import Seq
 import pandas as pd
 
 
-
 class Transcript:
+
 
     tx_lib = {} #tid : []
     coord2tid = {}
     labels = ['chrom', 'txStart', 'txEnd', 'strand', 'tid', 'eid', 'name',
               'cdsStart', 'cdsEnd', 'exonStarts', 'exonEnds', 'exonFrames']
+
 
     def __init__(self,entry):
         '''
@@ -47,11 +49,13 @@ class Transcript:
         else:
             return 'intergenic'
 
+
     @classmethod
     def load_transcripts(cls, annote_path,snvcoords):
         # print('DANIEL WE MIGHT NEED TO MAKE A TEMP FOLDER')
         # print('SEE load_transcripts in annotate.py')
         temp_bedfname = "temp_in.bed"
+        temp_bedfname_sorted = "temp_in_sorted.bed"
         bed_entries = None
 
         #reset dict
@@ -67,13 +71,23 @@ class Transcript:
                 line = "\t".join([chrom, start, end])
                 tempbed.writelines(line + "\n")
 
-        cmd = 'bedtools window -w 50 -a ' + temp_bedfname + ' -b ' + annote_path
-        bed_popen = Popen(cmd, shell=True, stdout=PIPE)
+        #cmd = 'bedtools window -w 50 -a ' + temp_bedfname + ' -b ' + annote_path
 
+        #Sort bedfile
+        cmd = ['bedtools', 'sort', '-i', temp_bedfname]
+        with open(temp_bedfname_sorted, 'w') as outfile:
+            # Run the command and direct the output to the file
+            subprocess.call(cmd, stdout=outfile)
+
+        #find closest ORFS
+        cmd = 'bedtools closest -a ' + temp_bedfname_sorted + ' -b ' + annote_path
+        bed_popen = Popen(cmd, shell=True, stdout=PIPE)
         bedtools_out = bed_popen.communicate()[0]
         ret = bed_popen.wait()
+
         if ret != 0:
             print("Bedtools process was interrupted!")
+
         if bedtools_out != '':
             bed_entries = bedtools_out.split('\n')[:-1]
 
@@ -108,19 +122,31 @@ class Transcript:
                             cls.tx_lib[entry['tid']] = obj
 
                 else:
-                    cls.coord2tid[snvcoord] = 'intergenic'
+                    cls.coord2tid[snvcoord] = 'Error Not Found'
+
         os.remove(temp_bedfname)
+
+
+
     def __dict__(self):
         return self.entry
 
     def get_utrs(self):
         exon_starts = self.entry['exonStarts'][:-1].split(',')
         exon_ends = self.entry['exonEnds'][:-1].split(',')
+        exon_frames = self.entry['exonFrames'].replace("\n", "")[:-1].split(',')
+        utrs = None
+
         if self.exons:
             ogexons = [(int(exon_starts[i]) - self.entry['txStart'], int(exon_ends[i]) - self.entry['txStart']) for i in range(len(exon_ends))]
-            utrs= [(ogexons[0][0],self.exons[0][0]-1),(self.exons[-1][1],ogexons[-1][1]-1)]
-        else:
-            utrs = None
+
+            utrs = [(ogexons[0][0], self.exons[0][0] - 1),(self.exons[-1][1], ogexons[-1][1] - 1)]
+
+            if exon_frames[-1] == '-1':  # -1 means entire exon is UTR
+                utrs[1] = ogexons[-1]
+            if exon_frames[0] == '-1':
+                utrs[0] = ogexons[0]
+
         return utrs
 
     def get_exons(self):
@@ -194,8 +220,12 @@ class Transcript:
         feature, rf = None, None
         t_snvpos = int(pos) - self.entry['txStart']
         #cdstart, cdsend = self.cds_start, self.cds_end
+        if pos not in range(int(self.entry['txStart']),int(self.entry['txEnd'])):
+            dist = abs(pos - int(self.entry['txEnd'])) if abs(pos - int(self.entry['txStart'])) > abs(pos - int(self.entry['txEnd'])) else abs(pos - int(self.entry['txStart']))
+            feature = 'intergenic | ' + str(dist) + 'bp from ' + self.entry['name']
 
-        if self.entry['tid'].startswith('NR'):
+
+        elif self.entry['tid'].startswith('NR'):
             feature = 'non-coding RNA'
 
         elif self.exons == None or t_snvpos < -50 or t_snvpos > self.tx_len + 50:
@@ -261,16 +291,17 @@ def annotate(identify_file, annotate_path):
     Transcript.load_transcripts(annotate_path,coords)
     res_data = res_data.rename(columns={'Chromosome': 'Chr'})
     Feature,Gene_Name,Distance  = list(), list(), list()
+
     for coord in coords:
         tx = Transcript.transcript(coord)
 
         if tx == 'intergenic':
             Feature.append('intergenic')
             Gene_Name.append('-')
+
         else:
             Feature.append(tx.feature)
             Gene_Name.append(tx.tx_info()[2])
-            print(tx.feature)
 
     res_data['Gene_Name'] = Gene_Name
     #res_data['Gene_Type'] = Gene_Type
@@ -290,4 +321,4 @@ def annotate(identify_file, annotate_path):
 # data_dir = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_06/identified/"
 # annotate_path = '/groups/clinical/projects/editability/tables/processed_tables/ncbiRefSeq.bed.gz'
 #  identify_files = [data_dir + x for x in os.listdir(data_dir) if x.endswith('_matched.txt')]
-# identify_file = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_06/identified/spCas9_78_VEGFA_R2_identified_matched.txt"
+# identify_file = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_06/identified/spCas9_78_ALT7_R2_06_identified_matched.txt"
