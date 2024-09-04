@@ -21,16 +21,17 @@ class Transcript:
 
         self.entry = entry
         for k in ['txStart', 'txEnd','cdsStart', 'cdsEnd']:
-            self.entry[k] = int(self.entry[k])
+            if k in self.entry.keys():
+                self.entry[k] = int(self.entry[k])
 
         self.overlapping_transcripts = []
 
         ##output
         #mapping transcript features (relative to transcript start)
-        self.exons= self.get_exons()
-        self.utrs = self.get_utrs()
+        if 'exonStarts' in self.entry.keys():
+            self.exons= self.get_exons()
+            self.utrs = self.get_utrs()
         self.tx_len = self.entry['txEnd'] - self.entry['txStart']  # 1608
-        self.flanking = [(-50, 0), (self.tx_len, self.tx_len + 50)]
 
         self.feature = None
         self.rf = None
@@ -47,7 +48,7 @@ class Transcript:
             obj.find_feature(pos)
             return obj
         else:
-            return 'intergenic'
+            return 'Not found'
 
 
     @classmethod
@@ -56,12 +57,12 @@ class Transcript:
         # print('SEE load_transcripts in annotate.py')
         temp_bedfname = "temp_in.bed"
         temp_bedfname_sorted = "temp_in_sorted.bed"
-        bed_entries = None
 
         #reset dict
         cls.coord2tid = {}
         cls.tx_lib = {}
 
+        # write bed file
         with open(temp_bedfname, 'w') as tempbed:
             for coord in snvcoords:
                 coord_field = coord.split(':')
@@ -101,7 +102,8 @@ class Transcript:
                     if snvcoord not in cls.coord2tid.keys():
                         cls.coord2tid[snvcoord] = entry['tid']
                         cls.tx_lib[entry['tid']] = cls(entry)
-                    # adjusting for overlaps to retrieve the most up to date transcript
+
+                    # adjusting if multiple ORFS found to retrieve the most up to date transcripts
                     else:
                         new_tid = entry['tid']
                         oldtid = cls.coord2tid[snvcoord]
@@ -125,6 +127,7 @@ class Transcript:
                     cls.coord2tid[snvcoord] = 'Error Not Found'
 
         os.remove(temp_bedfname)
+        os.remove(temp_bedfname_sorted)
 
 
 
@@ -228,20 +231,12 @@ class Transcript:
         elif self.entry['tid'].startswith('NR'):
             feature = 'non-coding RNA'
 
+        elif 'cdsStart' not in self.entry.keys() :
+            feature = 'Not Found'
+
         elif self.exons == None or t_snvpos < -50 or t_snvpos > self.tx_len + 50:
             # not in transcript - shouldn't happen or else no entry would be found
             feature = 'non-coding'
-
-        elif t_snvpos in range(self.flanking[0][0],self.flanking[0][1]+1) or t_snvpos in range(self.flanking[1][0],self.flanking[1][1]+1):
-
-            if self.entry['strand']=='+' and t_snvpos in range(self.flanking[0][1] -25,self.flanking[0][1] -36):
-                feature = 'flanking - upstream - promoter'
-            elif self.entry['strand']=='-' and t_snvpos in range(self.flanking[1][1] +25,self.flanking[1][1] +36):
-                feature = 'flanking - upstream - promoter'
-            elif t_snvpos in range(self.flanking[0][0],self.flanking[0][1]+1):
-                feature = 'flanking-upstream' if self.entry['strand'] == '+' else 'flanking-downstream'
-            else:
-                feature = 'flanking-downstream' if self.entry['strand'] == '+' else 'flanking-downstream'
 
 
         elif t_snvpos in range(self.utrs[0][0],self.utrs[0][1]+1) or t_snvpos in range(self.utrs[1][0],self.utrs[1][1]+1):
@@ -273,9 +268,14 @@ class Transcript:
                         feature = 'stop_codon'
 
                     rf = self.find_reading_frame(dist_from_cds_start)
-
                     break
+                elif abs(t_snvpos - x[0]) <= 3 or abs(t_snvpos - x[1]) <= 3:
+                    feature = 'splice site'
+                    break
+                else:
+                    feature = 'intron'
                 exon_n += 1
+
 
         self.feature, self.rf = feature, rf
 
