@@ -48,7 +48,7 @@ class CircleSeq:
         logger.info('Loading manifest...')
 
         with open(manifest_path, 'r') as f:
-            manifest_data = yaml.load(f)
+            manifest_data = yaml.load(f,Loader=yaml.FullLoader)
 
         try:
             # Validate manifest data
@@ -122,7 +122,13 @@ class CircleSeq:
                 self.samples = manifest_data['samples']
             else:
                 self.samples = {}
-                self.samples[sample] = manifest_data['samples'][sample]
+
+                try:
+                    self.samples[sample] = manifest_data['samples'][sample]
+                except KeyError as e:
+                    logger.error(sample + " is not a sample in the manifest file")
+                    logger.error(traceback.format_exc())
+                    quit()
             # Make folders for output
             for folder in ['preprocessed','aligned', 'identified', 'fastq', 'visualization', 'variants','coverage']:
                 output_folder = os.path.join(self.analysis_folder, folder)
@@ -310,11 +316,18 @@ class CircleSeq:
                 logger.info('Identifying genomic variants')
 
                 for sample in self.samples:
-                    sorted_bam_file = os.path.join(self.analysis_folder, 'aligned', sample + '.bam')
+                    sorted_bam_file = os.path.join(self.analysis_folder, 'coverage', sample + '_identified_matched_sorted.bam')
                     identified_sites_file = os.path.join(self.analysis_folder, 'identified', sample + '_identified_matched.txt')
                     variants_basename = os.path.join(self.analysis_folder, 'variants', sample)
                     logger.info('Mismatches {0}, Search_Radius {1}'.format(self.mismatch_threshold, self.search_radius))
                     callVariants.getVariants(identified_sites_file, self.reference_genome, sorted_bam_file, variants_basename, self.search_radius, self.mismatch_threshold)
+
+                    try:
+                        annotated_file = variants_basename +  '_Variants.txt'
+                        annotate(annotated_file, annotate_path=self.annotate_file)
+                    except Exception as e:
+                        logger.error('Error annotating genomic variants.')
+
 
                 logger.info('Finished identifying genomic variants')
 

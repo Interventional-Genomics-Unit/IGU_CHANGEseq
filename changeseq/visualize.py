@@ -27,6 +27,35 @@ colors = {'G': '#00CDCD', 'A': '#3A5FCD', 'T': '#8EE5EE', 'C': '#B0E0E6', 'N': '
 for c in ['Y', 'S', 'W', 'K', 'M', 'B', 'D', 'H', 'V', '.']:
     colors[c] = "#B3B3B3"
 
+# Python program for the above approach
+def levenshtein_two_matrix_rows(str1, str2):
+    # Get the lengths of the input strings
+    m = len(str1)
+    n = len(str2)
+    prev_row = [j for j in range(n + 1)]
+    curr_row = [0] * (n + 1)
+
+    for i in range(1, m + 1):
+        # Initialize the first element of the current row
+        curr_row[0] = i
+
+        for j in range(1, n + 1):
+            if str1[i - 1] == str2[j - 1]:
+                # Characters match, no operation needed
+                curr_row[j] = prev_row[j - 1]
+            else:
+                # Choose the minimum cost operation
+                curr_row[j] = 1 + min(
+                    curr_row[j - 1], # Insert
+                    prev_row[j],	 # Remove
+                    prev_row[j - 1] # Replace
+                )
+
+        # Update the previous row with the current row
+        prev_row = curr_row.copy()
+    # This code is contributed by Susobhan Akhuli
+    return curr_row[n]
+
 def parseSitesFile(infile):
     offtargets = []
     total_seq = 0
@@ -34,10 +63,10 @@ def parseSitesFile(infile):
         f.readline()
         for line in f:
             line = line.rstrip('\n')
-            if ',' in line:
-                line_items = line.split(',')
-            else:
+            if '\t' in line:
                 line_items = line.split('\t')
+            else:
+                line_items = line.split(',')
 
             # offtarget_reads = line_items[4]
             # no_bulge_offtarget_sequence = line_items[10]
@@ -54,7 +83,7 @@ def parseSitesFile(infile):
 
 
             try:
-                annot = line_items[18] # gene name
+                annot = line_items[23] # gene name
             except:
                 annot = ""
 
@@ -178,13 +207,15 @@ def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
         y = y_offset
         x = x_offset + i * box_size
 
-        dwg.add(dwg.rect((x, y), (box_size, box_size), fill=colors[c]))
+        dwg.add(dwg.rect((x, y), (box_size, box_size), fill=colors[c]),)
         dwg.add(dwg.text(c, insert=(x + 3, y + box_size - 3), fill='black', style="font-size:15px; font-family:Courier"))
     dwg.add(dwg.text('Reads', insert=(x_offset + box_size * len(target_seq) + 16, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
     dwg.add(dwg.text('Mismatches', insert=(box_size * (len(target_seq) + 1) + 90, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
-    dwg.add(dwg.text('Coordinates', insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
-    if annotation!=None:
-        dwg.add(dwg.text('Annotation', insert=(box_size * (len(target_seq) + 1) + 450, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
+    dwg.add(dwg.text('Annotation', insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size - 3),
+                     style="font-size:15px; font-family:Courier"))
+    #dwg.add(dwg.text('Coordinates', insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
+    #if annotation!=None:
+    #    dwg.add(dwg.text('Annotation', insert=(box_size * (len(target_seq) + 1) + 450, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
 
     # Draw aligned sequence rows
     y_offset += 1  # leave some extra space after the reference row
@@ -244,13 +275,13 @@ def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
             mismatch_text = dwg.text(seq['num_mismatch'], insert=(box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) - 2),
                                   fill='black', style="font-size:15px; font-family:Courier")
             dwg.add(mismatch_text)
-            mismatch_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
-                                  fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(mismatch_text)
+            #mismatch_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
+                                  #fill='black', style="font-size:15px; font-family:Courier")
+            #dwg.add(mismatch_text)
             if annotation!= None:
                 ## TH added coords
                 ## TH added annotations
-                annot_text = dwg.text(seq['annot'], insert=(box_size * (len(target_seq) + 1) + 450, y_offset + box_size * (line_number + 2) - 2),
+                annot_text = dwg.text(seq['annot'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
                                       fill='black', style="font-size:15px; font-family:Courier")
                 dwg.add(annot_text)
         else:
@@ -261,12 +292,12 @@ def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
                                   fill='black', style="font-size:15px; font-family:Courier")
             dwg.add(mismatch_text)
             ## TH added coords
-            mismatch_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
-                                  fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(mismatch_text)
+            #mismatch_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
+            #                      fill='black', style="font-size:15px; font-family:Courier")
+            #dwg.add(mismatch_text)
             if annotation!= None:
                 ## TH added annotation
-                annot_text = dwg.text(seq['annot'], insert=(box_size * (len(target_seq) + 1) + 450, y_offset + box_size * (line_number + 1) + 5),
+                annot_text = dwg.text(seq['annot'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
                                       fill='black', style="font-size:15px; font-family:Courier")
                 dwg.add(annot_text)
             reads_text02 = dwg.text(u"\u007D", insert=(box_size * (len(target_seq) + 1) + 7, y_offset + box_size * (line_number + 1) + 5),

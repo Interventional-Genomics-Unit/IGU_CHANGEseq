@@ -13,6 +13,7 @@ from findCleavageSites import get_sequence, regexFromSequence, alignSequences, r
 """
 Run samtools:mpileup and get all identified variants in the window sequences
 """
+
 def snpCall(matched_file, reference, bam_file, out, search_radius):
     basename = os.path.basename(out)
     output_folder = os.path.dirname(out)
@@ -24,42 +25,42 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
         for line in f:
             site = line.strip().split('\t')
             #  chromosome, windowStart, windowEnd, strand, bam, region_basename (=Targetsite_Name)
-            regions.append([site[0], int(site[1]) - search_radius, int(site[2]) + search_radius, '*', bam_file, site[15]])#'_'.join([site[26], site[3]])])
+            regions.append([site[0], int(site[-4]) - search_radius, int(site[-3]) + search_radius, '*', bam_file, site[15]])#'_'.join([site[26], site[3]])])
 
     print('Running samtools:mpileup for %s' % basename) #, file=sys.stderr)
-    out_vcf = os.path.join(output_folder, basename + '_mpileup_output')
-    if os.path.exists(out_vcf):
-        subprocess.check_call('rm -r %s' % out_vcf, shell=True, env=os.environ.copy())
-    os.makedirs(out_vcf)
-    process_mpileup = open(os.path.join(out_vcf, 'logFile_mpileup'), 'w')
+    out_bcf = os.path.join(output_folder, basename + '_output_bcftools')
+    if os.path.exists(out_bcf):
+        subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
+    os.makedirs(out_bcf)
+    process_mpileup = open(os.path.join(out_bcf, 'logFile_mpileup'), 'w')
 
+    """
+    print('Running samtools:mpileup for %s' % basename)  # , file=sys.stderr)
+    out_bcf = os.path.join(output_folder, basename + '_output_bcftools')
+    process_mpileup = open(os.path.join(out_bcf, 'logFile_mpileup'), 'w')
+    output = os.path.join(out_bcf,  + basename + '_BCFcall.vcf.gz')
+    cl_vcf = "bcftools mpileup --fasta-ref %s %s | bcftools call -cv -Oz -o %s" % (reference, bam_file, output)
+    subprocess.check_call(cl_vcf, shell=True, env=os.environ.copy(), stderr=process_mpileup, stdout=process_mpileup)
+    process_mpileup.close()
+
+
+    print('Collecting significant variant calls for %s' % basename) #, file=sys.stderr)
+    out_svc = os.path.join(output_folder, basename + '_output_svc')
+    process_svc = open(os.path.join(out_svc, 'logFile_svc'), 'w')
+    output = os.path.join(out_svc, name + '_SIGNFcall.txt')
+    cl_sed = "bcftools filter -i 'QUAL>20' %s | sed -n '/##/!p' | awk 'FNR>1' > %s" % (os.path.join(out_bcf, arch), output)
+    subprocess.check_call(cl_sed, shell=True, env=os.environ.copy(), stderr=process_svc, stdout=process_svc)
+    process_svc.close()
+
+    """
     for item in regions:
         chromosome, windowStart, windowEnd, strand, bam_file, region_basename = item
         region = '%s%s%s%s%s' % (chromosome, ":", int(windowStart), "-", int(windowEnd))
-        output = os.path.join(out_vcf, region_basename + '.vcf')
+        output = os.path.join(out_bcf, region_basename + '_BCFcall.vcf.gz')
 
-        cl_vcf = "bcftools mpileup --region %s --fasta-ref %s %s | bcftools call -cv -O -o %s" % (region, reference, bam_file, output)
-
-        #cl_vcf = 'samtools mpileup -v --region %s --fasta-ref %s %s > %s' % (region, reference, bam_file, output)
+        cl_vcf = "bcftools mpileup --region %s --fasta-ref %s %s | bcftools call -cv -Oz -o %s" % (region, reference, bam_file, output)
         subprocess.check_call(cl_vcf, shell=True, env=os.environ.copy(), stderr=process_mpileup, stdout=process_mpileup)
     process_mpileup.close()
-
-    #print('Collecting variants for %s' % basename)#, file=sys.stderr)
-    #out_bcf = os.path.join(output_folder, basename + '_output_bcftools')
-    #if os.path.exists(out_bcf):
-    #    subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
-    #os.makedirs(out_bcf)
-    # process_bcftools = open(os.path.join(out_bcf, 'logFile_bcftools'), 'w')
-
-    vcf_files = [f for f in os.listdir(out_vcf) if os.path.isfile(os.path.join(out_vcf, f))]
-    #for arch in vcf_files:
-    #    if not arch.startswith('.') and arch.endswith('.vcf'):
-    #        name = arch[:-4]
-    #        output = os.path.join(out_bcf, name + '_BCFcall.vcf')
-    #
-    #        cl_bcf = 'bcftools call -v -c %s > %s' % (os.path.join(out_vcf, arch), output)
-    #        subprocess.check_call(cl_bcf, shell=True, env=os.environ.copy(), stderr=process_bcftools, stdout=process_bcftools)
-    #process_bcftools.close()
 
     print('Collecting significant variant calls for %s' % basename) #, file=sys.stderr)
     out_svc = os.path.join(output_folder, basename + '_output_svc')
@@ -68,13 +69,13 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
     os.makedirs(out_svc)
     process_svc = open(os.path.join(out_svc, 'logFile_svc'), 'w')
 
-    #bcf_files = [f for f in os.listdir(out_bcf) if os.path.isfile(os.path.join(out_bcf, f))]
-    for arch in vcf_files:
-        if not arch.startswith('.') and arch.endswith('.vcf'):
+    bcf_files = [f for f in os.listdir(out_bcf) if os.path.isfile(os.path.join(out_bcf, f))]
+    for arch in bcf_files:
+        if not arch.startswith('.') and arch.endswith('.vcf.gz'):
             name = arch[:-12]
             output = os.path.join(out_svc, name + '_SIGNFcall.txt')
-
-            cl_sed = "sed -n '/##/!p' %s | awk 'FNR>1' > %s" % (os.path.join(out_bcf, arch), output)
+            cl_sed = "bcftools filter -i 'QUAL>20' %s | sed -n '/##/!p' | awk 'FNR>1' > %s" % (os.path.join(out_bcf, arch), output)
+            #cl_sed = "zcat %s | sed -n '/##/!p' | awk 'FNR>1' > %s" % (os.path.join(out_bcf, arch), output)
             subprocess.check_call(cl_sed, shell=True, env=os.environ.copy(), stderr=process_svc, stdout=process_svc)
     process_svc.close()
 
@@ -85,6 +86,33 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
     svc_files = [f for f in os.listdir(out_svc) if os.path.isfile(os.path.join(out_svc, f))]
     for arch in svc_files:
         if not arch.startswith('.') and arch.endswith('.txt'):
+
+            # #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT
+            ##ALT=<ID=*,Description="Represents allele(s) other than observed.">
+            ##INFO=<ID=INDEL,Number=0,Type=Flag,Description="Indicates that the variant is an INDEL.">
+            ##INFO=<ID=IDV,Number=1,Type=Integer,Description="Maximum number of raw reads supporting an indel">
+            ##INFO=<ID=IMF,Number=1,Type=Float,Description="Maximum fraction of raw reads supporting an indel">
+            ##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+            ##INFO=<ID=VDB,Number=1,Type=Float,Description="Variant Distance Bias for filtering splice-site artefacts in RNA-seq data (bigger is better)",Version="3">
+            ##INFO=<ID=RPB,Number=1,Type=Float,Description="Mann-Whitney U test of Read Position Bias (bigger is better)">
+            ##INFO=<ID=MQB,Number=1,Type=Float,Description="Mann-Whitney U test of Mapping Quality Bias (bigger is better)">
+            ##INFO=<ID=BQB,Number=1,Type=Float,Description="Mann-Whitney U test of Base Quality Bias (bigger is better)">
+            ##INFO=<ID=MQSB,Number=1,Type=Float,Description="Mann-Whitney U test of Mapping Quality vs Strand Bias (bigger is better)">
+            ##INFO=<ID=SGB,Number=1,Type=Float,Description="Segregation based metric.">
+            ##INFO=<ID=MQ0F,Number=1,Type=Float,Description="Fraction of MQ0 reads (smaller is better)">
+            ##FORMAT=<ID=PL,Number=G,Type=Integer,Description="List of Phred-scaled genotype likelihoods">
+            ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+            ##INFO=<ID=AF1,Number=1,Type=Float,Description="Max-likelihood estimate of the first ALT allele frequency (assuming HWE)">
+            ##INFO=<ID=AF2,Number=1,Type=Float,Description="Max-likelihood estimate of the first and second group ALT allele frequency (assuming HWE)">
+            ##INFO=<ID=AC1,Number=1,Type=Float,Description="Max-likelihood estimate of the first ALT allele count (no HWE assumption)">
+            ##INFO=<ID=MQ,Number=1,Type=Integer,Description="Root-mean-square mapping quality of covering reads">
+            ##INFO=<ID=FQ,Number=1,Type=Float,Description="Phred probability of all samples being the same">
+            ##INFO=<ID=PV4,Number=4,Type=Float,Description="P-values for strand bias, baseQ bias, mapQ bias and tail distance bias">
+            ##INFO=<ID=G3,Number=3,Type=Float,Description="ML estimate of genotype frequencies">
+            ##INFO=<ID=HWE,Number=1,Type=Float,Description="Chi^2 based HWE test P-value based on G3">
+            ##INFO=<ID=DP4,Number=4,Type=Integer,Description="Number of high-quality ref-forward , ref-reverse, alt-forward and alt-reverse bases">
+            ##bcftools_callVersion=1.11+htslib-1.11
+
             tag = arch[:-14]
             f = open(os.path.join(out_svc, arch), 'r')
             reads = f.readlines()
@@ -95,11 +123,11 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
                 if 'INDEL' in item[7]:
                     variants.append(
                         [basename, tag] + item[:2] + item[3:6] + [str(int(item[9][0])) + '|' + str(int(item[9][2]))] +
-                        [item[7].split(';')[3][3:]] + ['_'.join(item[9][4:].split(','))])
+                        [item[7].split(';')[3][3:]]+ ['_'.join(item[9][4:].split(','))])
                 else:
                     variants.append(
                         [basename, tag] + item[:2] + item[3:6] + [str(int(item[9][0])) + '|' + str(int(item[9][2]))] +
-                        [item[7].split(';')[0][3:]] + ['_'.join(item[9][4:].split(','))])
+                        [item[7].split(';')[0][3:]]  + ['_'.join(item[9][4:].split(','))])
 
     out_file = open(out + '_mpileupCall.txt', 'w')
     print('\t'.join(header), file=out_file)
@@ -107,10 +135,10 @@ def snpCall(matched_file, reference, bam_file, out, search_radius):
         print('\t'.join(item),file=out_file)
     out_file.close()
 
-    #print('Cleaning up directive for %s' % basename, file=sys.stderr)
+    print('Cleaning up directive for %s' % basename, file=sys.stderr)
     #subprocess.check_call('rm -r %s' % out_vcf, shell=True, env=os.environ.copy())
-    #subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
-    #subprocess.check_call('rm -r %s' % out_svc, shell=True, env=os.environ.copy())
+    subprocess.check_call('rm -r %s' % out_bcf, shell=True, env=os.environ.copy())
+    subprocess.check_call('rm -r %s' % out_svc, shell=True, env=os.environ.copy())
 
     print('Done running samtools:mpileup for %s' % basename) #, file=sys.stderr)
     return variants
@@ -137,7 +165,7 @@ def SNPreader(snp_file):
         basename, snpID, chromosome, one_based_position, reference, variant, quality, genotype, depth, PL = snp
         position = int(one_based_position) - 1
         key = '_'.join([basename, chromosome])
-        ga[HTSeq.GenomicInterval(chromosome, position, position + 1, ".")] = [position, reference, variant, genotype, quality, key]
+        ga[HTSeq.GenomicInterval(chromosome, position, position + 1, ".")] = [position, reference, variant, genotype, quality, key, depth]
     return ga
 
 
@@ -151,9 +179,9 @@ def arrayOffTargets(matched_file, search_radius):
             site = line.strip().split('\t')
 
             Chromosome = site[0]
-            start = int(site[6]) - search_radius
-            end = int(site[7]) + search_radius
-            Name = site[3]
+            start = int(site[-4]) - search_radius
+            end = int(site[-3]) + search_radius
+            Name = site[15]
 
             offtargets_dict[Name] = site
 
@@ -164,7 +192,7 @@ def arrayOffTargets(matched_file, search_radius):
 
 def snpAdjustment(matched_file, snp_file, out, mismatch_threshold, search_radius):
     output_file = open(out + '_Variants.txt', 'w')
-    print('Chromosome', 'Start', 'End', 'Name', 'ReadCount', 'Strand',
+    print('#Chromosome', 'Start', 'End', 'Genomic Coordinate', 'Nuclease_Read_Count', 'Strand',
           'Variant_WindowSequence',
           'Variant_Site_SubstitutionsOnly.Sequence', 'Variant_Site_SubstitutionsOnly.NumSubstitutions',
           'Variant_Site_SubstitutionsOnly.Strand',
@@ -172,7 +200,7 @@ def snpAdjustment(matched_file, snp_file, out, mismatch_threshold, search_radius
           'Variant_Site_GapsAllowed.Substitutions', 'Variant_Site_GapsAllowed.Insertions', 'Variant_Site_GapsAllowed.Deletions',
           'Variant_Site_GapsAllowed.Strand',
           'Cell', 'Targetsite', 'TargetSequence', 'Variant_RealignedTargetSequence',
-          'Reference', 'Variant', 'Genotype', 'Quality',
+          'Reference', 'Variant', 'Genotype', 'Quality', 'Depth',
           sep='\t', file=output_file)
     output_file.close()
 
@@ -186,13 +214,13 @@ def snpAdjustment(matched_file, snp_file, out, mismatch_threshold, search_radius
         gi = gi_offtargets[name]
 
         chromosome = site[0]
-        window_sequence = site[9]
+        window_sequence = site[-1]
         window_sequence = window_sequence.upper()
-        cell, targetsite = site[25:27]
-        TargetSequence = site[28]
+        cell, targetsite = site[13], site[14]
+        TargetSequence = site[16]
         output01 = site[0:6]
         output03 = [cell, targetsite, TargetSequence]
-        ots_nb, ots_bu = site[10], site[15]
+        ots_nb, ots_bu = site[7], site[9]
 
         #  obtain variant window sequence
         wkey = '_'.join([basename, chromosome])
@@ -200,7 +228,8 @@ def snpAdjustment(matched_file, snp_file, out, mismatch_threshold, search_radius
 
         for i, v in ga_snp[gi].steps():
             if v:
-                position, reference, variant, genotype, quality, key = v
+
+                position, reference, variant, genotype, quality, key, depth = v
                 if key == wkey:
                     variant = variant.split(',')[0]
                     for n, pos in enumerate(range(gi.start, gi.end)):
@@ -209,7 +238,7 @@ def snpAdjustment(matched_file, snp_file, out, mismatch_threshold, search_radius
                             insert_start.append(n)
                             end_pos = n + len(reference)
                             insert_end.append(end_pos)
-                            snp_data[str(position)] = [position, reference, variant, genotype, quality]
+                            snp_data[str(position)] = [position, reference, variant, genotype, quality, depth]
 
         tri = 0
         window_sequence_variant = ''
@@ -247,7 +276,7 @@ def snpAdjustment(matched_file, snp_file, out, mismatch_threshold, search_radius
             if variant_flag:
                 total_genotype, total_reference, total_variant, total_quality = '', '', '', ''
                 for pos in snp_data:
-                    position, reference, variant, genotype, quality = snp_data[pos]
+                    position, reference, variant, genotype, quality, depth = snp_data[pos]
                     if total_genotype != '':
                         total_genotype += ''.join([':', genotype])
                         total_reference += ''.join([':', reference])
@@ -261,7 +290,7 @@ def snpAdjustment(matched_file, snp_file, out, mismatch_threshold, search_radius
 
                 output02 = [variant_ots_no_bulge, mismatches, chosen_alignment_strand_m,
                             variant_ots_bulge, length, substitutions, insertions, deletions, chosen_alignment_strand_b]
-                output04 = [total_reference, total_variant, total_genotype, total_quality]
+                output04 = [total_reference, total_variant, total_genotype, total_quality, depth]
                 output_line = output01 + [window_sequence_variant] + output02 + output03 + [realigned_target] + output04
 
                 with open(out + '_Variants.txt', 'a') as output_file:
@@ -297,3 +326,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# df = pd.read_csv("/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_09/unmerged/hg38/variants/spCas9_471_ADA_1545_R2_Variants.txt",sep= "\t")

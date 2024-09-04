@@ -9,6 +9,7 @@ import argparse
 global colors
 colors = {'sample1': '#8FBC8F', 'sample2': '#029386'}#, 'T': '#D8BFD8', 'C': '#8FBC8F', 'N': '#AFEEEE', 'R': '#3CB371', '-': '#E6E6FA'}
 
+
 def parse_df(file, threshold = 6):
     df = pd.read_csv(file)
     df = df[df['Nuclease_Read_Count'] >= threshold]
@@ -24,21 +25,27 @@ def parse_df(file, threshold = 6):
 def join_replicates(sample1_identified_file,sample2_identified_file,threshold = 6):
     sample1_df = parse_df(sample1_identified_file,threshold)
     sample2_df = parse_df(sample2_identified_file,threshold)
-    df = sample1_df.join(sample2_df.set_index('Site_Sequence_NoGaps'),on = 'Site_Sequence_NoGaps',how = 'outer',lsuffix=".Rep1",rsuffix=".Rep2")
+    df = sample1_df.merge(sample2_df, on=['Genomic Coordinate','Site_Sequence_NoGaps'], how='outer',suffixes = [".Rep1", ".Rep2"])
+
+    #df = sample1_df.join(sample2_df.set_index('Site_Sequence_NoGaps'),on = 'Site_Sequence_NoGaps',how = 'outer',lsuffix=".Rep1",rsuffix=".Rep2")
     df['Nuclease_Read_Count.Rep1'] = df['Nuclease_Read_Count.Rep1'].fillna(0)
     df['Nuclease_Read_Count.Rep2'] = df['Nuclease_Read_Count.Rep2'].fillna(0)
     df['Gene_Name'] = df['Gene_Name.Rep1'].fillna(df['Gene_Name.Rep2'])
     df['Site_Sequence'] = df['Site_Sequence.Rep1'].fillna(df['Site_Sequence.Rep2'])
     df['Site_Sequence_Gaps_Allowed'] = df['Site_Sequence_Gaps_Allowed.Rep1'].fillna(df['Site_Sequence_Gaps_Allowed.Rep2'])
-    df['Genomic Coordinate'] = df['Genomic Coordinate.Rep1'].fillna(df['Genomic Coordinate.Rep2'])
+    #df['Genomic Coordinate'] = df['Genomic Coordinate.Rep1'].fillna(df['Genomic Coordinate.Rep2'])
     df['Site_Substitution_Number'] = df['Site_Substitution_Number.Rep1'].fillna(df['Site_Substitution_Number.Rep2'])
     df['DNA_Bulge'] = df['DNA_Bulge.Rep1'].fillna(df['DNA_Bulge.Rep2'])
     df['RNA_Bulge'] = df['RNA_Bulge.Rep1'].fillna(df['RNA_Bulge.Rep2'])
     df['Feature'] = df['Feature.Rep1'].fillna(df['Feature.Rep2'])
+
+    df['Number of Replicates Sites found'] = [2 if (i * j) > 1 else False for i, j in zip(df['Nuclease_Read_Count.Rep1'], df['Nuclease_Read_Count.Rep2'])]
+
     df = df[['Genomic Coordinate','Nuclease_Read_Count.Rep1','Nuclease_Read_Count.Rep2',
            'Control_Read_Count.Rep1','Control_Read_Count.Rep2','Site_Sequence_NoGaps',
         'Site_Sequence','Site_Sequence_Gaps_Allowed','Site_Substitution_Number',
         'DNA_Bulge','RNA_Bulge','Gene_Name','Feature']]
+
 
     return df
 
@@ -58,24 +65,36 @@ def scatter_by_overlap(x1,x2,name):
     #A = (x + y) / 2
     #M = x - y
     #plt.scatter(x=A, y=M, s=10, c = colors)  # s is point size
-
     plt.title(name)
     plt.show()
 
-def swarm_plot(x1,x2,name,figout):
-    x5 = np.log2(np.array(x1)+1)
-    y = np.log2(np.array(x2)+1)
-    x = x5[x5>0]
-    y= y[x5>0]
-    overlap = [True if i> 1 and j > 1 else False for i,j in zip(x,y)]
-    #sns.swarmplot(y=x[~np.array(overlap)], color="lightgrey")
-    #sns.swarmplot(y=x[overlap],color = 'royalblue')
-    plt.figure(figsize = (4,4))
-    sns.swarmplot(y=x, color='royalblue')
+def swarm_plot(df,name,figout):
+    x1, x2 = list(df['Nuclease_Read_Count.Rep1']), list(df['Nuclease_Read_Count.Rep2'])
+    y = [(x + y) / 2 if (x * y) > 0 else x + y for x, y in zip(x1, x2)]
+    y = np.log2(np.array(y))
+    df['Log2 Mean Reads'] = y
+    df['Guide Name'] = [name] * len(df['Log2 Mean Reads'])
+    df['Shared'] = [True if (i * j) > 0 else False for i,j in zip(x1,x2)]
+    palette=['lightgrey','royalblue']
+
+    # Highlight on target if present
+
+    if len(df.loc[df['Site_Substitution_Number'] + df['RNA_Bulge'].fillna(0) + df['DNA_Bulge'].fillna(0) ==0,'Shared']):
+        df.loc[(df['Site_Substitution_Number'] + df['RNA_Bulge'].fillna(0) + df['DNA_Bulge'].fillna(0) == 0), 'Shared'] = 'on target'
+        df = df.sort_values('Shared',ascending = False)
+        palette = ['#6D091F','royalblue', 'lightgrey']
+    plt.figure(figsize = (5,5))
+    g = sns.swarmplot(data = df,
+                      x= 'Guide Name',
+                      y= 'Log2 Mean Reads',
+                      hue='Shared',
+                      palette=palette
+                      )
     plt.yticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)), [10, 100, 1000, 10000, 100000])
     plt.title(name)
     plt.ylabel("Read Counts")
-    plt.show()
+    plt.xlabel("")
+    #plt.show()
     plt.savefig(figout, bbox_inches='tight')
     plt.close(figout)
 
@@ -91,10 +110,9 @@ def scatter_plot(x1,x2,name,figout):
     plt.yticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)),[10,100,1000,10000,100000])
     plt.legend(loc=1)
     plt.title(name)
-    plt.show()
+    #plt.show()
     plt.savefig(figout, bbox_inches='tight')
     plt.close(figout)
-
 
 
 def calc_jaccard(Rep1_unique,Rep2_unique,shared):
@@ -125,6 +143,8 @@ def normalize(joined,threshold=6):
     joined['Nuclease_Read_Count.Rep1'] = [x if x >=threshold else 0 for x in rep1]
     joined['Nuclease_Read_Count.Rep2'] = [x if x >= threshold else 0 for x in rep2]
     joined = joined[(joined['Nuclease_Read_Count.Rep1'] + joined['Nuclease_Read_Count.Rep2'] !=0)]
+    joined['Number of Replicates Sites found'] = [2 if (i * j) > 1 else False for i, j in
+                                              zip(joined['Nuclease_Read_Count.Rep1'], joined['Nuclease_Read_Count.Rep2'])]
     return joined
 
 def vennplot_replicates(joined,sample1,sample2,figout):
@@ -153,14 +173,17 @@ def vennplot_replicates(joined,sample1,sample2,figout):
 
 
 def repCombiner(sample1,sample2,file1,file2,name,analysis_folder,read_threshold = 6):
-    ## Inputs
-    # sample1 = "spCas9_WT_ADA_1545_r1"
-    # sample2 =  "spCas9_WT_ADA_1545_r2"
-    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_05/12878/unmerged/'
-    # name = "NA12878 spCas9 ADA 1545+"  # for labeling
+    ## Input
+    # sample1, sample2  = "spCas9_78_ADA_1562_R1", "spCas9_78_ADA_1562_R2"
+    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_08/unmerged/'
+
+    # name = "NA12878 spCas9 ADA 1562+"  # for labeling
     # file1 = analysis_folder+ 'identified/'+ sample1 + '_identified_matched_annotated.csv'
     # file2 = analysis_folder+ 'identified/'+ sample2 + '_identified_matched_annotated.csv'
+    # read_threshold = 6
 
+    file1 = analysis_folder + 'identified/' + sample1 + '_identified_matched_annotated.csv'
+    file2 = analysis_folder + 'identified/' + sample2 + '_identified_matched_annotated.csv'
     ##  Inputs
     sample1_identified_file = file1
     sample2_identified_file = file2
@@ -200,7 +223,7 @@ def repCombiner(sample1,sample2,file1,file2,name,analysis_folder,read_threshold 
     x1, x2 = list(joined_normalized['Nuclease_Read_Count.Rep1']), list(joined_normalized['Nuclease_Read_Count.Rep2'])
 
     scatter_plot(x1, x2, name, scatter_out)
-    swarm_plot(x1, x2, name, swarm_out)
+    swarm_plot(joined_normalized, name, swarm_out)
 
 '''
 data_similarity = []
@@ -215,7 +238,7 @@ for r in read_thresholds:
         sim = vennplot_replicates(joined,sample1,sample2)
     data_similarity.append(sim)
     
- df = pd.read_csv("/groups/clinical/projects/Assay_Dev/CHANGEseq/CASAFE/casoffinder/hg38_CasSAFE_casoffinder.txt",sep = "\t")
+df = pd.read_csv("/groups/clinical/projects/Assay_Dev/CHANGEseq/CASAFE/casoffinder/hg38_CasSAFE_casoffinder.txt",sep = "\t")
 df = df.drop(columns = ["Guide_ID","crRNA"])
 joined_normalized = joined_normalized.rename(columns = {'Genomic Coordinate':'Coordinates'})
 

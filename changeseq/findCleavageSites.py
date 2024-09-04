@@ -37,6 +37,7 @@ def tabulate_merged_start_positions(BamFileName, cells, name, targetsite, mapq_t
         print(*header, sep='\t', file=o)
 
         for read in sorted_bam_file:
+
             output = False
             first_read_chr, first_read_position, first_read_strand = None, None, None
             second_read_chr, second_read_position, second_read_strand = None, None, None
@@ -117,6 +118,7 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
         print(*header, sep='\t', file=o)
         for bundle in HTSeq.pair_SAM_alignments(sorted_bam_file, bundle=True):
             output = False
+            bundle = [b for b in bundle if None not in b]
             first_read_chr, first_read_position, first_read_strand = None, None, None
             second_read_chr, second_read_position, second_read_strand = None, None, None
 
@@ -159,11 +161,12 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
                         first_read_position = first_read.iv.start_d
                         first_read_strand = first_read.iv.strand
                 if len(filtered_second_read_list) == 1:
-                    second_read = filtered_second_read_list[0]
-                    if second_read.aQual >= mapq_threshold and not first_read.flag & 1024:
-                        second_read_chr = second_read.iv.chrom
-                        second_read_position = second_read.iv.start_d
-                        second_read_strand = second_read.iv.strand
+                        second_read = filtered_second_read_list[0]
+                        if second_read.aQual >= mapq_threshold and not first_read.flag & 1024:
+                            ### Error ^ ???
+                            second_read_chr = second_read.iv.chrom
+                            second_read_position = second_read.iv.start_d
+                            second_read_strand = second_read.iv.strand
 
             # We check whether or not the read was aligned by asking for 'first_read_chr'
             if first_read_chr:
@@ -330,8 +333,9 @@ def output_alignments(narrow_ga, ga_windows, reference_genome, target_sequence, 
           # sep='\t', file=o1)
     # Yichao Redefine output
     print('#Chromosome', 'Start', 'End', 'Genomic Coordinate', 'Nuclease_Read_Count', 'Strand',  # 0:5 bed6 format
-          'Control_Read_Count','Site_Sequence','Site_Substitution_Number','Site_Sequence_Gaps_Allowed','DNA_Bulge', 'RNA_Bulge', # contron window count, # 10:11, 15
-          'File_Name', 'Cell', 'Target_site', 'Full_Name', 'Target_Sequence', 'Realigned_Target_Sequence',  # 24:29
+          'Control_Read_Count','Site_Sequence','Site_Substitution_Number','Site_Sequence_Gaps_Allowed','RNA_Bulge', 'DNA_Bulge', # contron window count, # 10:11, 15
+          'File_Name', 'Cell', 'Target_site', 'Full_Name', 'Target_Sequence', 'Realigned_Target_Sequence',# 24:29
+          'MappingPositionStart', 'MappingPositionEnd', 'WindowName','WindowSequence',
           sep='\t', file=o1)
     o1.close()
 
@@ -374,6 +378,7 @@ def output_alignments(narrow_ga, ga_windows, reference_genome, target_sequence, 
             outline = [row[row_index] for row_index in [0,1,2,3,4,5]]
             outline += [control_window_counts]
             outline += [row[row_index] for row_index in [10,11,15,19,20,24,25,26,27,28,29]]
+            outline += [row[row_index] for row_index in [6,7,8,9]]
             print(*(outline), sep='\t', file=o1)
 
 
@@ -466,6 +471,7 @@ def extendedPattern(seq, errors): # 0921, Seems this function is not used, Yicha
 Recreate A!!! sequence in the window_sequence that matches the conditions given for the fuzzy regex. 
 Currently only working for off-targets with at most one bulge !!! 
 """
+
 ## Yichao: Fix the code to get the 'realigned target sequence' to use the new feature in regex library that provides fuzzy_changes
 def realignedSequences(targetsite_sequence, chosen_alignment, errors):
 
@@ -642,7 +648,9 @@ def compare(ref, bam, control, targetsite, search_radius, windowsize, mapq_thres
                 tabulate_merged_start_positions(control, cells, name, targetsite, mapq_threshold, gap_threshold,
                                                 start_threshold, out + '_CONTROL', pattern, all_chromosomes, read_length)
         else:
+
             print("Tabulate nuclease standard start positions.", file=sys.stderr)
+            outfile_base = out + '_NUCLEASE'
             nuclease_ga, nuclease_ga_windows, nuclease_ga_stranded, nuclease_ga_coverage, total_nuclease_count = \
                 tabulate_start_positions(bam, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_NUCLEASE', pattern, all_chromosomes)
             print("Tabulate control standard start positions.", file=sys.stderr)
