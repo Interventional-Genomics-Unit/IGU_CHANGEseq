@@ -11,11 +11,12 @@ IGU Added output
 * Fastq QC using Fastp
 * Identified site bam file and alignment historgram
 * annotation to sites
-* annotations to visualization 
+* annotations to visualization
+* Fixed variable analysis bug
 
 
  ## Installation
- git clone the IGU_CHANGEseq into a designated folder using the following command
+ git clone the IGU_CHANGEseq into a designated folder using the following co5mmand
  
  ```
  git clone https://github.com/Interventional-Genomics-Unit/IGU_CHANGEseq
