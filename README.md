@@ -43,8 +43,8 @@ The Tsai lab change-seq pipeline requires a manifest yaml file specifying input 
 The bash wrapper is initiated with the parameters.csv, manifest.csv, command, and sample_name
 
 ```
-cd IGU_CHANGEseq/changeseq/test
-bash path-to/CHANGEseq_wrapper.sh merged_parameters.csv manifest.csv all all
+cd IGU_CHANGEseq/changeseq
+bash path-to/CHANGEseq_wrapper.sh test/merged_parameters.csv test/manifest.csv all all
 ```
 
 # Writing A Manifest File
