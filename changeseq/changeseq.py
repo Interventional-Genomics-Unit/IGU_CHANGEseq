@@ -169,6 +169,20 @@ class CircleSeq:
                 self.samples[sample]['read1'] = sample_read1_outfile
                 self.samples[sample]['read2'] = sample_read2_outfile
 
+
+                control_read1_outfile = os.path.join(self.analysis_folder, 'preprocessed',
+                                                    sample + '_R1_processesed_control.fastq.gz')
+                control_read2_outfile = os.path.join(self.analysis_folder, 'preprocessed',
+                                                    sample + '_R2_processesed_control.fastq.gz')
+                unmerged_fastqQC(self.samples[sample]['controlread1'],
+                                 self.samples[sample]['controlread2'],
+                                 control_read1_outfile,
+                                 control_read2_outfile,
+                                 self.adapter_list,
+                                 logfile)
+                self.samples[sample]['controlread1'] = control_read1_outfile
+                self.samples[sample]['controlread2'] = control_read2_outfile
+
         if self.dedup_umi:
             logger.info('Deduplicating UMIs...')
 
