@@ -20,7 +20,7 @@ import findCleavageSites
 import callVariants
 from annotate import annotate
 from deduplicate import deduplicateReads
-from fastq_qc import fastqQC
+from fastq_qc import merged_fastqQC,unmerged_fastqQC
 
 logger = log.createCustomLogger('root')
 global p_dir
@@ -61,11 +61,20 @@ class CircleSeq:
             # Allow the user to specify read threshold, window_size and search_radius if they'd like
             if os.path.isfile(p_dir + "/changeseq/data/paths.txt"):
                 self.annotate_file = open(p_dir + "/changeseq/data/paths.txt", "r").readlines()[0]
+
             elif os.path.isfile(p_dir + "/data/paths.txt"):
                 self.annotate_file = open(p_dir + "/data/paths.txt", "r").readlines()[0]
             else:
                 print("No Annotation file path found in /changeseq/data/paths.txt")
                 self.annotate_file = None
+
+            if os.path.isfile(p_dir + "/changeseq/data/adapter.fa"):
+                self.adapter_list = p_dir + "/changeseq/data/adapter.fa"
+            elif os.path.isfile(p_dir + "/data/adapter.fa"):
+                self.adapter_list = p_dir + "/data/adapter.fa"
+            else:
+                print("No adapter.fa for in  in /changeseq/data/")
+                quit()
 
             if 'search_radius' in manifest_data:
                 self.search_radius = manifest_data['search_radius']
@@ -142,10 +151,23 @@ class CircleSeq:
     def processReads(self):
 
         for sample in self.samples:
-            outfile = os.path.join(self.analysis_folder, 'preprocessed', sample + '.html')
-            fastqQC(self.samples[sample]['read1'],
-                    self.samples[sample]['read2'],
-                    outfile)
+            logfile = os.path.join(self.analysis_folder, 'preprocessed', sample + '.html')
+            if self.merged_analysis:
+
+                merged_fastqQC(self.samples[sample]['read1'],
+                        self.samples[sample]['read2'],
+                        logfile)
+            else:
+                sample_read1_outfile = os.path.join(self.analysis_folder, 'preprocessed', sample + '_R1_processesed.fastq.gz')
+                sample_read2_outfile = os.path.join(self.analysis_folder, 'preprocessed',sample + '_R2_processesed.fastq.gz')
+                unmerged_fastqQC(self.samples[sample]['read1'],
+                        self.samples[sample]['read2'],
+                                 sample_read1_outfile,
+                                 sample_read2_outfile,
+                                 self.adapter_list,
+                                 logfile)
+                self.samples[sample]['read1'] = sample_read1_outfile
+                self.samples[sample]['read2'] = sample_read2_outfile
 
         if self.dedup_umi:
             logger.info('Deduplicating UMIs...')
