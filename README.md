@@ -2,9 +2,10 @@
  An extension of CHANGE-seq for Off-Target Site Nomination
  https://github.com/tsailabSJ/changeseq
  
-IGU Added output
+IGU Added Features:
 
 * manifest.yaml file creation by .csv input
+* removal of ME adapters and illumina adapter (unmerged version only)
 * Optional UMI deduplication
 * replicate combination
 * normalization of replicates
@@ -88,19 +89,28 @@ When running the end-to-end analysis functionality of the CHANGEseq package a nu
 - `identify`: identifies nominated off-target sites
 - `visualize`:annotates identified sites and creates alignment .svg image
 - `coverage`: create .bam file, alignment histogram and stats file for the identified sites
-- `variants`: *currently* updating 
+- `variants`: *currently* updating
+
+Replicates can be combined seperate calling `replicate_combiner.py`, see below
 
 ### Samples
 
 - `all`: runs all samples in manifest
 - `sample_name`: runs the specific sample indicated
 
-### Stand alone scripts
+## Stand alone scripts
 
-These are run in the python terminal
+### Replicate Combiner
 
-`python replicate_combiner.py `: *currently* updating
+Normalizes sample replicates and combines counts into one .csv file. Also creates venn diagram, scatter plot and swarm plot
 
+```
+python path-to/IGU_CHANGEseq/changeseq/replicate_combiner.py --sample1 test_replicate1 --sample2 test_replicate2 --name test --output path-to/TEST_DATA/  --read_threshold 6
+```
+
+### Multisample combined
+
+in progess
 
 # Pipeline Output
 When running the full pipeline, the results of each step are outputted to the `output_folder` in a separate folder for each step. The output folders and their respective contents are as follows:
