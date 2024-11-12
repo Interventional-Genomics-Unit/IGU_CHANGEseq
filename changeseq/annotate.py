@@ -1,4 +1,3 @@
-from subprocess import Popen, PIPE
 import subprocess
 import os
 from Bio.Seq import Seq
@@ -55,39 +54,70 @@ class Transcript:
     def load_transcripts(cls, annote_path,snvcoords):
         # print('DANIEL WE MIGHT NEED TO MAKE A TEMP FOLDER')
         # print('SEE load_transcripts in annotate.py')
-        temp_bedfname = "temp_in.bed"
-        temp_bedfname_sorted = "temp_in_sorted.bed"
+        #temp_bedfname = "temp_in.bed"
+        #temp_bedfname_sorted = "temp_in_sorted.bed"
+
+        bed_data = ""
 
         #reset dict
         cls.coord2tid = {}
         cls.tx_lib = {}
 
-        # write bed file
-        with open(temp_bedfname, 'w') as tempbed:
-            for coord in snvcoords:
-                coord_field = coord.split(':')
-                chrom = coord_field[0]
-                start = coord_field[1].split('-')[0]
-                end = coord_field[1].split('-')[1]
-                line = "\t".join([chrom, start, end])
-                tempbed.writelines(line + "\n")
+        #with open(temp_bedfname, 'w') as tempbed:
+        for coord in snvcoords:
+            coord_field = coord.split(':')
+            chrom = coord_field[0]
+            start = coord_field[1].split('-')[0]
+            end = coord_field[1].split('-')[1]
+            line = "\t".join([chrom, start, end])
+            bed_data += line + "\n"
 
         #cmd = 'bedtools window -w 50 -a ' + temp_bedfname + ' -b ' + annote_path
 
         #Sort bedfile
-        cmd = ['bedtools', 'sort', '-i', temp_bedfname]
-        with open(temp_bedfname_sorted, 'w') as outfile:
-            # Run the command and direct the output to the file
-            subprocess.call(cmd, stdout=outfile)
+        sort_cmd = ['bedtools', 'sort', '-i', "stdin"]
+
+        sorted_bed = subprocess.Popen(
+            sort_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True
+        )
+
+        sorted_output, sort_error = sorted_bed.communicate(input=bed_data)
+        sorted_bed.wait()
 
         #find closest ORFS
-        cmd = 'bedtools closest -a ' + temp_bedfname_sorted + ' -b ' + annote_path
-        bed_popen = Popen(cmd, shell=True, stdout=PIPE)
-        bedtools_out = bed_popen.communicate()[0]
-        ret = bed_popen.wait()
+        # Check for errors in the sorting step
+        if sort_error:
+            print("Error during sorting:", sort_error)
+        else:
+            # Pipe the sorted BED data directly to `bedtools window`
+            window_cmd = ["bedtools", "closest", "-a",  "stdin", "-b", annote_path]
+            window_output = subprocess.Popen(
+                window_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
 
-        if ret != 0:
-            print("Bedtools process was interrupted!")
+            # Run the command and capture the output
+            bedtools_out, stderr = window_output.communicate(input=sorted_output)
+            window_output.wait()
+
+            if window_output.returncode == 0:
+                pass
+            else:
+                print("Error:", stderr)
+
+        #cmd = 'bedtools closest -a ' + temp_bedfname_sorted + ' -b ' + annote_path
+        #bed_popen = Popen(cmd, shell=True, stdout=PIPE)
+        #bedtools_out = bed_popen.communicate()[0]
+        #et = bed_popen.wait()
+
+        #if ret != 0:
+         #   print("Bedtools process was interrupted!")
 
         if bedtools_out != '':
             bed_entries = bedtools_out.split('\n')[:-1]
@@ -125,10 +155,6 @@ class Transcript:
 
                 else:
                     cls.coord2tid[snvcoord] = 'Error Not Found'
-
-        os.remove(temp_bedfname)
-        os.remove(temp_bedfname_sorted)
-
 
 
     def __dict__(self):
@@ -183,14 +209,6 @@ class Transcript:
             exons = None
         return exons
 
-
-    def get_tx_seq(self,fasta_seq):
-        '''
-        Using a Refseq Transcript_ID, Ensembl Transcript_ID or coordinates find transcript annotations and transcript sequence
-        from either a genome fasta path or given genome sequence
-        '''
-        self.tx_seq = fasta_seq.seq[self.entry['txStart']:self.entry['txEnd']]
-        return self.tx_seq
 
     def get_cdsseq(self):
         '''

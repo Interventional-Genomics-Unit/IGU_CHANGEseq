@@ -19,6 +19,7 @@ def deduplicateReads(bc_pattern,read1, read2, processed_read1,processed_read2):
 
     # Run umi extraction
     logger.info('Running umi extraction for {0}'.format(sample_name))
+    #umi_tools extract -I {read1} --bc-pattern=CCCCCCCCNNNNNNNNNNNN --read2-in={read2} --stdout={out1} --read2-out={out2} --log=
     extract_command ='umi_tools extract -I {0} --bc-pattern={1} --read2-in={2} --stdout={3} --read2-out={4} --log={5}'.format(
         read1,
         bc_pattern,

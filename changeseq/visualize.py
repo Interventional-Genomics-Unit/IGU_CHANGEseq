@@ -28,8 +28,9 @@ for c in ['Y', 'S', 'W', 'K', 'M', 'B', 'D', 'H', 'V', '.']:
     colors[c] = "#B3B3B3"
 
 # Python program for the above approach
-def levenshtein_two_matrix_rows(str1, str2):
+def levenshtein_two_matrix_rows(str1, str2,PAM):
     # Get the lengths of the input strings
+    
     m = len(str1)
     n = len(str2)
     prev_row = [j for j in range(n + 1)]
@@ -54,7 +55,8 @@ def levenshtein_two_matrix_rows(str1, str2):
         # Update the previous row with the current row
         prev_row = curr_row.copy()
     # This code is contributed by Susobhan Akhuli
-    return curr_row[n]
+
+    return curr_row[n] - PAM.count('N')
 
 def parseSitesFile(infile):
     offtargets = []
@@ -73,17 +75,21 @@ def parseSitesFile(infile):
             # bulge_offtarget_sequence = line_items[15]
             # target_seq = line_items[28]
             # realigned_target_seq = line_items[29]
+
             offtarget_reads = line_items[4]
             no_bulge_offtarget_sequence = line_items[7].upper()  # Site_Sequence
             bulge_offtarget_sequence = line_items[9]
             target_seq = line_items[16]
             realigned_target_seq = line_items[17]
-            coord = line_items[3]
+            coord = line_items[3].split("-")[0]
             num_mismatch = int(line_items[8])
 
 
             try:
-                annot = line_items[23] # gene name
+                if "intergenic" not in line_items[24]:
+                    annot = line_items[23] + "," + line_items[24] # gene name and feature
+                else:
+                    annot = ""
             except:
                 annot = ""
 
@@ -143,16 +149,12 @@ def find_PAM(seq,PAM):
     return PAM_index
 
 
-def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
+def visualizeOfftargets(infile, outfile, title, PAM):
 
     output_folder = os.path.dirname(outfile)
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-
-    if annotation!=None:
-        #infile = annotate(identify_file, gencode)
-        infile = infile
     # Get offtargets array from file
     offtargets, target_seq, total_seq = parseSitesFile(infile)
 
@@ -210,12 +212,10 @@ def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
         dwg.add(dwg.rect((x, y), (box_size, box_size), fill=colors[c]),)
         dwg.add(dwg.text(c, insert=(x + 3, y + box_size - 3), fill='black', style="font-size:15px; font-family:Courier"))
     dwg.add(dwg.text('Reads', insert=(x_offset + box_size * len(target_seq) + 16, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
-    dwg.add(dwg.text('Mismatches', insert=(box_size * (len(target_seq) + 1) + 90, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
+    dwg.add(dwg.text('Distance', insert=(box_size * (len(target_seq) + 1) + 90, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
     dwg.add(dwg.text('Annotation', insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size - 3),
                      style="font-size:15px; font-family:Courier"))
-    #dwg.add(dwg.text('Coordinates', insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
-    #if annotation!=None:
-    #    dwg.add(dwg.text('Annotation', insert=(box_size * (len(target_seq) + 1) + 450, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
+    dwg.add(dwg.text('Coordinates', insert=(box_size * (len(target_seq) + 1) + 350, y_offset + box_size - 3), style="font-size:15px; font-family:Courier"))
 
     # Draw aligned sequence rows
     y_offset += 1  # leave some extra space after the reference row
@@ -224,8 +224,11 @@ def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
         realigned_target_seq = offtargets[j]['realigned_target_seq']
         no_bulge_offtarget_sequence = offtargets[j]['seq']
         bulge_offtarget_sequence = offtargets[j]['bulged_seq']
+        dist = ''
+        b_dist = ''
 
-        if no_bulge_offtarget_sequence != '':
+        if no_bulge_offtarget_sequence != '': ## Theres at least an alignment with nok bulges
+            dist = levenshtein_two_matrix_rows(no_bulge_offtarget_sequence, target_seq,PAM)
             k = 0
             line_number += 1
             y = y_offset + line_number * box_size
@@ -246,10 +249,11 @@ def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
                     dwg.add(dwg.rect((x, box_size + y), (box_size, box_size), fill=colors[c]))
                     dwg.add(dwg.text(c, insert=(x + 3, 2 * box_size + y - 3), fill='black', style="font-size:15px; font-family:Courier"))
                     k += 1
-        if bulge_offtarget_sequence != '':
+        if bulge_offtarget_sequence != '': #theres a bulge seq present
             k = 0
             line_number += 1
             y = y_offset + line_number * box_size
+            b_dist = levenshtein_two_matrix_rows(bulge_offtarget_sequence, realigned_target_seq,PAM)
             for i, (c, r) in enumerate(zip(bulge_offtarget_sequence, realigned_target_seq)):
                 x = x_offset + k * box_size
                 if r == '-':
@@ -272,34 +276,40 @@ def visualizeOfftargets(infile, outfile, title, PAM, annotation = None):
             reads_text = dwg.text(str(seq['reads']), insert=(box_size * (len(target_seq) + 1) + 20, y_offset + box_size * (line_number + 2) - 2),
                                   fill='black', style="font-size:15px; font-family:Courier")
             dwg.add(reads_text)
-            mismatch_text = dwg.text(seq['num_mismatch'], insert=(box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) - 2),
+            mismatch_text = dwg.text(dist, insert=(box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) - 2),
                                   fill='black', style="font-size:15px; font-family:Courier")
             dwg.add(mismatch_text)
-            #mismatch_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
-                                  #fill='black', style="font-size:15px; font-family:Courier")
-            #dwg.add(mismatch_text)
-            if annotation!= None:
-                ## TH added coords
-                ## TH added annotations
-                annot_text = dwg.text(seq['annot'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
+
+            annot_text = dwg.text(seq['annot'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
                                       fill='black', style="font-size:15px; font-family:Courier")
-                dwg.add(annot_text)
+            dwg.add(annot_text,)
+
+            coord_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 350, y_offset + box_size * (line_number + 2) - 2),
+                                  fill='black', style="font-size:15px; font-family:Courier")
+            dwg.add(coord_text)
+
+
         else:
             reads_text = dwg.text(str(seq['reads']), insert=(box_size * (len(target_seq) + 1) + 20, y_offset + box_size * (line_number + 1) + 5),
                                   fill='black', style="font-size:15px; font-family:Courier")
             dwg.add(reads_text)
-            mismatch_text = dwg.text(seq['num_mismatch'], insert=(box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 1) + 5),
+
+            mismatch_text = dwg.text(dist, insert=(box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) -2),
+                                  fill='black', style="font-size:15px; font-family:Courier")
+            dwg.add(mismatch_text)
+            annot_text = dwg.text(seq['annot'], insert=(
+            box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
+                                  fill='black', style="font-size:15px; font-family:Courier")
+            dwg.add(annot_text)
+            mismatch_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 350, y_offset + box_size * (line_number + 1) + 5),
+                                  fill='black', style="font-size:15px; font-family:Courier")
+            dwg.add(mismatch_text)
+
+            mismatch_text = dwg.text(b_dist, insert=(box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 1) -2),
                                   fill='black', style="font-size:15px; font-family:Courier")
             dwg.add(mismatch_text)
             ## TH added coords
-            #mismatch_text = dwg.text(seq['coord'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
-            #                      fill='black', style="font-size:15px; font-family:Courier")
-            #dwg.add(mismatch_text)
-            if annotation!= None:
-                ## TH added annotation
-                annot_text = dwg.text(seq['annot'], insert=(box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
-                                      fill='black', style="font-size:15px; font-family:Courier")
-                dwg.add(annot_text)
+
             reads_text02 = dwg.text(u"\u007D", insert=(box_size * (len(target_seq) + 1) + 7, y_offset + box_size * (line_number + 1) + 5),
                                   fill='black', style="font-size:23px; font-family:Courier")
             dwg.add(reads_text02)
@@ -313,13 +323,12 @@ def main():
                         required=True)
     parser.add_argument("-o", "--outfile", help="FullPath/VIZ", required=True)
     parser.add_argument("-t", "--title", help="Plot title", required=True)
-    parser.add_argument("-a", "--annotation", help="if specified,annotation will be performed", default=None)
     parser.add_argument("--PAM", help="PAM sequence", default="NGG")
     args = parser.parse_args()
 
     print(args)
 
-    visualizeOfftargets(args.identified_file, args.outfile, args.title, args.PAM, args.annotation)
+    visualizeOfftargets(args.identified_file, args.outfile, args.title, args.PAM)
 
 
 if __name__ == "__main__":
@@ -327,18 +336,9 @@ if __name__ == "__main__":
 
 
 '''
-infile = "/groups/clinical/projects/Assay_Dev/IGU_CHANGEseq/CASAFE/identified/spCas9_CASAFE_dual_guide_rep2_identified_matched_annotated.csv"
-outfile = "/groups/clinical/projects/Assay_Dev/IGU_CHANGEseq/CASAFE/identified/spCas9_CASAFE_dual_guide_rep2_annotated.svg"
 
-#infile = "/groups/clinical/projects/Assay_Dev/CIRCLESeq/CS_02/identified/Cas9_IR2LA_CHANGEseq_identified_matched_annotated.csv"
-#outfile =  "/groups/clinical/projects/Assay_Dev/CIRCLESeq/CS_02/visualization/Cas9_IL2RA_CHANGEseq_annotated.svg"
-data_dir = '/groups/clinical/projects/Assay_Dev/IGU_CHANGEseq/test/identified/'
-identify_files = [data_dir + x for x in os.listdir(data_dir) if x.endswith('_annotated.csv')]
-infile = '/groups/clinical/projects/Assay_Dev/IGU_CHANGEseq/CASAFE/identified/spCas9_CASAFE_sgRNA_rep1_identified_matched_annotated.csv'
-outfile = infile.replace('.csv','.svg')
-title = 'spCas9 CASAFE2 sgRNA rep1'
-
-visualizeOfftargets(infile = infile, outfile = outfile, title = title, PAM= 'NGG' ,annotation =True)
-
-
+infile = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_12/identified/py3_781_12878_rep1_identified_matched_annotated.csv"
+outfile = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_12/visualization/py3_781_12878_rep1."
+title = 'py3_781_12878_rep1'
+visualizeOfftargets(infile = infile, outfile = outfile, title = title, PAM= 'NGG')
 '''

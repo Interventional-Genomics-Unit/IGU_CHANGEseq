@@ -1,11 +1,9 @@
-import os
 import pandas as pd
 import numpy as np
-from matplotlib_venn import venn2
 import matplotlib.pyplot as plt
 import seaborn as sns
 import argparse
-import regex as re
+
 
 global colors
 colors = {'sample1': '#8FBC8F',
@@ -98,21 +96,6 @@ def swarm_plot(df, name, figout):
     plt.close(figout)
 
 
-def scatter_plot(x1, x2, name, figout):
-    x = np.log2(np.array(x1) + 1)
-    y = np.log2(np.array(x2) + 1)
-
-    pearR = np.corrcoef(x1, x2)[1, 0]
-    plt.figure(figsize=(4, 4))
-    plt.scatter(x[x * y > 0], y[x * y > 0], color=colors.values()[1], label="rho= %s" % (round(pearR, 3)))
-    plt.xticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)), [10, 100, 1000, 10000, 100000])
-    plt.yticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)), [10, 100, 1000, 10000, 100000])
-    plt.legend(loc=1)
-    plt.title(name)
-    plt.show()
-    plt.savefig(figout, bbox_inches='tight')
-    plt.close(figout)
-
 
 def calc_jaccard(Rep1_unique, Rep2_unique, shared):
     total = Rep1_unique + Rep2_unique + shared
@@ -152,82 +135,8 @@ def normalize(joined):
     joined.loc[:, joined.columns.str.startswith('Nuc')] = median_normalization(counts)
     return joined
 
-
-def vennplot_replicates(joined, sample1, sample2, figout):
-    Rep1_unique = len(joined[joined['Nuclease_Read_Count.Rep2'] == 0])
-    Rep2_unique = len(joined[joined['Nuclease_Read_Count.Rep1'] == 0])
-    shared = len(joined[joined['Nuclease_Read_Count.Rep2'] * joined['Nuclease_Read_Count.Rep1'] > 0])
-    ja = calc_jaccard(Rep1_unique, Rep2_unique, shared)
-    values = (Rep1_unique, Rep2_unique, shared)
-    names = (sample1, sample2)
-    plt.figure(figsize=(4, 4))
-    v = venn2(subsets=values, set_labels=names, set_colors=(colors['sample1'], colors['sample2']), alpha=0.5)
-    v.get_label_by_id("A").set_fontsize(8)
-    v.get_label_by_id("B").set_fontsize(8)
-    v.get_label_by_id("A").set_y(0.6)
-    v.get_label_by_id("B").set_y(0.6)
-    v.get_label_by_id("A").set_x(len(sample1) / 100.0 - 0.4)
-    v.get_label_by_id("B").set_x(len(sample1) / 100.0)
-    plt.annotate("% Replicate Sites Overlap " + str(ja), xy=v.get_label_by_id('010').get_position() +
-                                                            np.array([0, -0.5]), xytext=(-60, -30), ha='center',
-                 textcoords='offset points')
-
-    plt.savefig(figout, bbox_inches='tight')
-    plt.show()
-    return ja
-
-
-def repCombiner(sample1, sample2, file1, file2, name, analysis_folder, read_threshold=6):
-    ## Input
-    # sample1, sample2  = "spCas9_12878_CASAFE_r1", "spCas9_12878_CASAFE_r2"
-    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CASAFE/'
-    # name = "NA12878 spCas9 CASAFE"  # for labeling
-    # file1 = analysis_folder+ 'identified/'+ sample1 + '_identified_matched_annotated.csv'
-    # file2 = analysis_folder+ 'identified/'+ sample2 + '_identified_matched_annotated.csv'
-    # read_threshold = 6
-
-    ##  Inputs
-    sample1_identified_file = file1
-    sample2_identified_file = file2
-
-    ## Outputs
-    joined_out = os.path.join(analysis_folder, 'identified', sample1) + 'JOINED_RAW' + sample2 + '.csv'
-    joined_normalized_out = os.path.join(analysis_folder, 'identified',
-                                         sample1) + 'JOINED_NORMALIZED' + sample2 + '.csv'
-    venn_out_without_normalize = analysis_folder + 'visualization/' + name.replace(" ",
-                                                                                   "_") + "_replicate_venndiagram.png"
-    venn_out = analysis_folder + 'visualization/' + name.replace(" ",
-                                                                 "_") + "_replicate_without_normalizing_venndiagram.png"
-    scatter_out = analysis_folder + 'visualization/' + name.replace(" ", "_") + "_replicate_scatterplot.png"
-    swarm_out = analysis_folder + 'visualization/' + name.replace(" ", "_") + "_replicate_swarmplot.png"
-
-    # Join without normalizing
-    print("Joining...")
-    print(sample1_identified_file)
-    print("with")
-    print(sample2_identified_file)
-
-    joined = join_replicates(sample1_identified_file, sample2_identified_file, threshold=read_threshold)
-    joined.to_csv(joined_out, index=False)
-
-    print("Writing raw/unormalized vendiagram...")
-    print(venn_out_without_normalize)
-    sim = vennplot_replicates(joined, sample1, sample2, venn_out_without_normalize)
-    print(sim)
-
-    joined_normalized = normalize(joined, threshold=read_threshold)
-    joined_normalized.to_csv(joined_normalized_out, index=False)
-
-    # plotting
-    sim = vennplot_replicates(joined_normalized, sample1, sample2, venn_out)
-    print(sim)
-
-    x1, x2 = list(joined_normalized['Nuclease_Read_Count.Rep1']), list(joined_normalized['Nuclease_Read_Count.Rep2'])
-
-    scatter_plot(x1, x2, name, scatter_out)
-    swarm_plot(joined_normalized, name, swarm_out)
-
 def multi_combine(file,name,analysis_folder, read_threshold=6):
+    # analysis folde must have all '_identified_matched_annotated.csv' files present
     # name = "spCas9 CASAFE"
     # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CASAFE/'
     # file =  analysis_folder + "multiple_combine.csv"
@@ -286,6 +195,6 @@ def parse_args():
 def main():
     args = parse_args()
     try:
-        repCombiner(args.sample1, args.sample2, args.file1, args.file2, args.name, args.output, args.read_threshold)
+        multi_combine(args.file, args.name, args.output, args.read_threshold)
     except Exception as e:
         print('Error combined replicates')

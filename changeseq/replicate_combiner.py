@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use a non-GUI backend
 from matplotlib_venn import venn2
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -9,6 +11,11 @@ import argparse
 global colors
 colors = {'sample1': '#8FBC8F', 'sample2': '#029386'}#, 'T': '#D8BFD8', 'C': '#8FBC8F', 'N': '#AFEEEE', 'R': '#3CB371', '-': '#E6E6FA'}
 
+def check_file(file):
+    if os.path.isfile(file):
+        pass
+    else:
+        print(file + " is not in the your-CHANGEseq-analysis-path/identified/ directory")
 
 def parse_df(file, threshold = 6):
     df = pd.read_csv(file)
@@ -66,7 +73,7 @@ def scatter_by_overlap(x1,x2,name):
     #M = x - y
     #plt.scatter(x=A, y=M, s=10, c = colors)  # s is point size
     plt.title(name)
-    plt.show()
+    #plt.show()
 
 def swarm_plot(df,name,figout):
     x1, x2 = list(df['Nuclease_Read_Count.Rep1']), list(df['Nuclease_Read_Count.Rep2'])
@@ -126,6 +133,7 @@ def create_pseudo_sample(x1,x2):
     return pseudo_sample
 
 def median_normalization(read_counts1,read_counts2):
+    # Similar to DESeq2
     #https://divingintogeneticsandgenomics.com/post/details-in-centered-log-ratio-clr-normalization-for-cite-seq-protein-count-data/
     pseudo_sample = create_pseudo_sample(read_counts1,read_counts2)#(log_cnt1,log_cnt2)
     norm_count1 = [y / x for x,y in zip(pseudo_sample,read_counts1)]
@@ -167,31 +175,31 @@ def vennplot_replicates(joined,sample1,sample2,figout):
                  textcoords='offset points')
 
     plt.savefig(figout, bbox_inches='tight')
-    plt.show()
+    #plt.show()
     return ja
 
 
 
-def repCombiner(sample1,sample2,file1,file2,name,analysis_folder,read_threshold = 6):
+def repCombiner(sample1,sample2,name,analysis_folder,read_threshold = 6):
     ## Input
-    # sample1, sample2  = "spCas9_78_ADA_1562_R1", "spCas9_78_ADA_1562_R2"
-    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_08/unmerged/'
-
-    # name = "NA12878 spCas9 ADA 1562+"  # for labeling
-    # file1 = analysis_folder+ 'identified/'+ sample1 + '_identified_matched_annotated.csv'
-    # file2 = analysis_folder+ 'identified/'+ sample2 + '_identified_matched_annotated.csv'
+    # sample1, sample2  = "489_24631_R1", "489_24631_R2"
+    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/sgRNA_489_CHANGE-seq/'
+    # name = "NA24631 spCas9 PRF1 sgRNA_489"  # for labeling
     # read_threshold = 6
+    print("Creating Replicates Folder")
+    output_folder = os.path.join(analysis_folder, "replicates")
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
-    file1 = analysis_folder + 'identified/' + sample1 + '_identified_matched_annotated.csv'
-    file2 = analysis_folder + 'identified/' + sample2 + '_identified_matched_annotated.csv'
     ##  Inputs
-    sample1_identified_file = file1
-    sample2_identified_file = file2
-
+    sample1_identified_file = analysis_folder + 'identified/' + sample1 + '_identified_matched_annotated.csv'
+    sample2_identified_file = analysis_folder + 'identified/' + sample2 + '_identified_matched_annotated.csv'
+    check_file(sample1_identified_file)
+    check_file(sample2_identified_file)
 
     ## Outputs
-    joined_out = os.path.join(analysis_folder, 'identified', sample1) + 'JOINED_RAW' + sample2 + '.csv'
-    joined_normalized_out = os.path.join(analysis_folder, 'identified',sample1) + 'JOINED_NORMALIZED' + sample2 + '.csv'
+    joined_out = os.path.join(output_folder, sample1) + 'JOINED_RAW' + sample2 + '.csv'
+    joined_normalized_out = os.path.join(output_folder,sample1) + 'JOINED_NORMALIZED' + sample2 + '.csv'
     venn_out_without_normalize = analysis_folder + 'visualization/' + name.replace(" ",
                                                                                    "_") + "_replicate_venndiagram.png"
     venn_out = analysis_folder + 'visualization/' + name.replace(" ",
@@ -208,7 +216,8 @@ def repCombiner(sample1,sample2,file1,file2,name,analysis_folder,read_threshold 
     joined = join_replicates(sample1_identified_file, sample2_identified_file, threshold=read_threshold)
     joined.to_csv(joined_out, index=False)
 
-    print("Writing raw/unormalized vendiagram...")
+
+    print("Writing raw un-normalized vendiagram...")
     print(venn_out_without_normalize)
     sim = vennplot_replicates(joined, sample1, sample2, venn_out_without_normalize)
     print(sim)
@@ -253,10 +262,10 @@ df2[~df2['DNA'].isna()]
 
 def parse_args():
     mainParser = argparse.ArgumentParser()
-    mainParser.add_argument('--sample1', '-s1', help='name of sample 1. matches sample in manifest')
-    mainParser.add_argument('--sample2', '-s2', help='name of sample 2. matches sample in manifest')
-    mainParser.add_argument('--file1', '-f1', help='absolute path of sample1 identified_annotated.csv file')
-    mainParser.add_argument('--file2', '-f2', help= 'absolute path of sample2 identified_annotated.csv file')
+    mainParser.add_argument('--sample1', '-s1', help='name of replicate 1. Must match sample in manifest')
+    mainParser.add_argument('--sample2', '-s2', help='name of replicate 2. Must match sample in manifest')
+    #mainParser.add_argument('--file1', '-f1', help='absolute path of sample1 identified_annotated.csv file')
+    #mainParser.add_argument('--file2', '-f2', help= 'absolute path of sample2 identified_annotated.csv file')
     mainParser.add_argument('--output', '-o', help='output directory')
     mainParser.add_argument('--name', '-n', help='Sample name for labeling graphs')
     mainParser.add_argument('--read_threshold', '-rt', help='limit sample combining to a min read count threshold',default =6)
@@ -266,7 +275,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    try:
-        repCombiner(args.sample1, args.sample2, args.file1, args.file2, args.name, args.output, args.read_threshold)
-    except Exception as e:
-        print('Error combined replicates')
+    repCombiner(args.sample1, args.sample2,args.name, args.output, int(args.read_threshold))
+
+if __name__ == '__main__':
+    main()
