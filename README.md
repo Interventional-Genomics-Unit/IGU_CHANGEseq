@@ -4,6 +4,7 @@
  
 IGU Added Features:
 
+* updated to python3
 * manifest.yaml file creation by .csv input
 * removal of ME adapters and illumina adapter (unmerged version only)
 * Optional UMI deduplication
@@ -17,7 +18,7 @@ IGU Added Features:
 
 
  ## Installation
- git clone the IGU_CHANGEseq into a designated folder using the following co5mmand
+ git clone the IGU_CHANGEseq into a designated folder using the following command
  
  ```
  git clone https://github.com/Interventional-Genomics-Unit/IGU_CHANGEseq
