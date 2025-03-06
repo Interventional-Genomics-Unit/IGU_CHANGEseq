@@ -47,6 +47,8 @@ Once the csv files are created, users can simply run the changeseq.py with the p
 raw fastq directory <code>--raw_fastq_folder</code> and main analysis directory <code>--analysis_folder</code>
 
 
+The bash wrapper is initiated with the parameters.csv, manifest.csv, command, and sample_name
+
 ```
 cd /your-path/IGU_CHANGEseq/
 python changeseq/changeseq.py all --analysis_folder /your-path/IGU_CHANGEseq/changeseq/test/Standard_Output --raw_fastq_folder /your-path/IGU_CHANGEseq/changeseq/test/input --settings unmerged_parameters.csv --manifest manifest.csv --sample all
