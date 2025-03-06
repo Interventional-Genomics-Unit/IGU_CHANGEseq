@@ -1,6 +1,7 @@
 reference_genome,data/input/CIRCLEseq_test_genome.fa
-analysis_folder,data/MergedOutput/
-raw_fastq_folder,data/input/
+normalize, median
+changeseq_adapter, CTGTCTCTTATACACATCT
+cutadapt, cutadapt
 bwa,bwa
 samtools,samtools
 read_threshold,6

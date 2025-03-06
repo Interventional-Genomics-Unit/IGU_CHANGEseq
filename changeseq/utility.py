@@ -5,9 +5,11 @@ import validation
 import yaml
 import os
 import log
+import pandas as pd
 """
 FASTQ generator function from umi package
 """
+logger = log.createCustomLogger('root')
 
 def write_default_yaml(param_name,param):
     default_yaml = os.path.dirname(os.path.realpath(validation.__file__)) + "/default.yaml"
@@ -38,21 +40,71 @@ def reverseComplement(sequence):
     return sequence.translate(transtab)[::-1]
 
 
-def get_parameters(manifest_data):
+def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
+    sample_manifest = f'{analysis_folder}/{os.path.basename(sample_manifest)}'
+    yaml_fname = sample_manifest.replace(".csv", ".yaml")
     default_yaml = os.path.dirname(os.path.realpath(validation.__file__)) + "/default.yaml"
+
     with open(default_yaml, 'r') as f:
         default = yaml.load(f, Loader=yaml.FullLoader)
-    with open(manifest_data, 'r') as f:
-        return_dict = yaml.load(f, Loader=yaml.FullLoader)
-    default['analysis_folder'] = os.getcwd()
-    validation.validateManifest(return_dict)
-    for p in default:
-        if not p in return_dict:
-            if p == "samples":
-                logger.error("No samples are found in the yaml file, please provide samples (fastq) to start with!")
-                exit()
-            return_dict[p] = default[p]
-    return return_dict
 
+    validation.exists(filepath=sample_manifest)
+
+
+    manifest_df = pd.read_csv(sample_manifest)
+    if settings != 'default':
+        settings = f'{analysis_folder}/{os.path.basename(settings)}'
+        logger.info("importing settings loaded")
+        settings_dict = pd.read_csv(settings, names=['parameter', 'setting']).set_index('parameter').to_dict()['setting']
+    else:
+        settings_dict = {}
+
+    return_dict = {}
+    for param,default_s in default.items():
+        if param in settings_dict.keys():
+            return_dict[param] = settings_dict[param]
+        else:
+            return_dict[param] = default[param]
+
+    return_dict['analysis_folder'] = analysis_folder
+    return_dict['raw_fastq_folder'] = fq_dir
+
+    validation.validateManifest(return_dict)
+
+    return_dict['samples'] = {}
+    return_dict['replicates'] = {}
+
+    num_samples = len(manifest_df['sequencing_sample_name'])
+    if num_samples == 0:
+        logger.error("ERROR; NO SAMPLES DETECTED IN MANIFEST")
+        exit()
+
+    fq_files = [x for x in os.listdir(fq_dir) if "fastq" in x]
+
+    columns = manifest_df.columns
+    if 'replicate_group_name' in columns:
+        for name in set(manifest_df['replicate_group_name']):
+            replicate_samples = manifest_df.loc[manifest_df['replicate_group_name'] == name, ['sample_name', 'target']].to_dict('list')
+
+            return_dict['replicates'][name] = replicate_samples
+
+    for i in range(num_samples):
+        #sample_basename = [x[:x.find('_001.f') - 2] for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x][0]
+        sample_basename = [x for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x if '_R1_' in x][0]
+        control_basename = [x for x in fq_files if manifest_df.iloc[i]['control_sequencing_sample_name'] in x if '_R1_' in x][0]
+        return_dict['samples'][ manifest_df.iloc[i]['sample_name']] = {}
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['target'] = manifest_df.iloc[i]['target']
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['read1'] = fq_dir + sample_basename
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['read2'] = fq_dir + sample_basename.replace("_R1_","_R2_")
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['controlread1'] = fq_dir + control_basename
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['controlread2'] = fq_dir + control_basename.replace("_R1_","_R2_")
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['description'] = str(manifest_df.iloc[i]['description'])
+
+    with open(yaml_fname, 'w') as yf:
+        yaml.dump( return_dict, yf, default_flow_style=False)
+    logger.info("yaml manifest file created")
+
+
+    return return_dict
 
 

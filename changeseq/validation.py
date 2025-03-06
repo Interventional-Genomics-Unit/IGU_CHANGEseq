@@ -17,7 +17,7 @@ logger = logging.getLogger('root')
 def exists(filepath):
     if not os.path.isfile(filepath):
         logger.error('{0} does not exist'.format(filepath))
-        sys.exit()
+        #sys.exit()
 
 
 def checkIfBinary(filepath):

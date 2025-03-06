@@ -1,2 +1,2 @@
-sequencing_sample_name,sample_name,control_sequencing_sample_name,target,description
-TEST,TEST,TEST_control,GAGTCCGAGCAGAAGAAGAANGG,TestCell
+sequencing_sample_name,sample_name,control_sequencing_sample_name,target,description,replicate_group_name
+TEST,TEST,TEST_control,GAGTCCGAGCAGAAGAAGAANGG,TestCell,none

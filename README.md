@@ -4,20 +4,21 @@
  
 IGU Added Features:
 
-* manifest.yaml file creation by .csv input
-* removal of ME adapters and illumina adapter (unmerged version only)
+* updated to Python3
+* simple .csv sample manifest
+* removal of TN5 ME adapters and illumina adapter (unmerged version only)
 * Optional UMI deduplication
 * replicate combination
-* normalization of replicates
-* Fastq QC using Fastp
-* Identified site bam file and alignment historgram
-* annotation to sites
-* annotations to visualization
+* normalization of replicates - (median-of-ratios or total count scaling)
+* QC metrics of alignments and fastq circularization read composition
+* identified site bam file for use with IGV
+* genomic annotation to sites
+* more plotting options - venn diagram, swarmplot and more
 * Fixed variable analysis bug
 
 
  ## Installation
- git clone the IGU_CHANGEseq into a designated folder using the following co5mmand
+ git clone the IGU_CHANGEseq into a designated folder using the following command
  
  ```
  git clone https://github.com/Interventional-Genomics-Unit/IGU_CHANGEseq
@@ -33,40 +34,46 @@ IGU Added Features:
 In order to set up the annotation table for annotating OT sites run makefiles to download RefSeq annotations. Additional commands can change the location and FTP link (--outdir --ftp_path)
 
 ```
-python /home/thudson/projects/IGU_CHANGEseq/changeseq/changeseq.py makefiles
+cd /your-path/IGU_CHANGEseq/
+python changeseq/changeseq.py makefiles
 ```
  
 # Usage
 
-The Tsai lab change-seq pipeline requires a manifest yaml file specifying input files, output directory, and pipeline parameters. In the IGU version this file is created using two csv files 1) A Parameters file 2) A list of Samples and Controls file. Once the csv files are created, users can simply run the change-seq wrapper as shown below. 
+The Tsai lab change-seq pipeline requires a manifest yaml file specifying input files, output directory, and pipeline parameters. 
+In the IGU version this file is split into t two csv files 1) a sample manifest file <code>--manifest</code> 2) an optional settings 
+file <code>--settings</code>
+Once the csv files are created, users can simply run the changeseq.py with the parameters indicating the 
+raw fastq directory <code>--raw_fastq_folder</code> and main analysis directory <code>--analysis_folder</code>
 
-
-The bash wrapper is initiated with the parameters.csv, manifest.csv, command, and sample_name
 
 ```
-cd IGU_CHANGEseq/changeseq
-bash path-to/CHANGEseq_wrapper.sh test/merged_parameters.csv test/manifest.csv all all
+cd /your-path/IGU_CHANGEseq/
+python changeseq/changeseq.py all --analysis_folder /your-path/IGU_CHANGEseq/changeseq/test/Standard_Output --raw_fastq_folder /your-path/IGU_CHANGEseq/changeseq/test/input --settings unmerged_parameters.csv --manifest manifest.csv --sample all
 ```
 
-# Writing A Manifest File
-When running the end-to-end analysis functionality of the CHANGEseq package a number of inputs are required. To simplify the formatting of these inputs and to encourage reproducibility, these parameters are inputted into the pipeline via a manifest. This first manifest.csv sample takes into the 
+# Writing the Sample Manifest
+The original manifest.yaml is no longer used in this version. The prior manifest.yaml is now split into two .csv input files. 
+The manifest file has the following .csv file 
 
 
-- `sequencing_sample_name`: sample name as indicated in the raw fastq (Leave out the ("_S[#]_R1_001")
+- `sequencing_sample_name`: sample name as indicated in the raw fastq (Leave out the ("_R1_001")
 - `sample_name`: The sample name as you wish to see on the output file names  
-- `control_sequencing_sample_name`: No RNP control sample name as indicated in the raw fastq (Leave out the ("_S[#]_R1_001")
+- `control_sequencing_sample_name`: No RNP control sample name as indicated in the raw fastq (Leave out the ("_R1_001")
 - `target`: Target sequence for that sample. Accepts degenerate bases.
-- `description`: A brief description of the sample. Typically the cell or gDNA Source name
+- `description`: A brief description of the sample. Usually the cell or gDNA Source name
+- `replicate_group_name`: (optional) an identifier that designates replicate samples. This must be present to run normalization  
      
 
- # Writing A Parameters File
- This file is a .csv with the first column the paramter name and the second column the paraemeter name. See IGU_CHANGEseq/changeseq/test/parameters.csv
+ # Parameters and Setting
+ This file is a .csv with the first column the parameter name and the second column the parameter name. 
+ The parameters are now stored internally and only need to be given if different than default
+ See IGU_CHANGEseq/changeseq/test/parameters.csv
 
-- `reference_genome`: The absolute path to the reference genome FASTA file.
-- `analysis_folder`: The absolute path to the folder in which all pipeline outputs will be saved.
-- `raw_fastq_folder`:The absolute path to the folder in which all raw fastq files are stored.
+
 - `bwa`: The absolute path to the `bwa` executable
 - `samtools`: The absolute path to the `samtools` executable
+- `cutadapt`: The absolute path to the `cutadapt` executable
 - `read_threshold`: The minimum number of reads at a location for that location to be called as a site. We recommend leaving it to the default value of 4.
 - `window_size`: Size of the sliding window, we recommend leaving it to the default value of 3.
 - `mapq_threshold`: Minimum read mapping quality score. We recommend leaving it to the default value of 50.
@@ -75,44 +82,32 @@ When running the end-to-end analysis functionality of the CHANGEseq package a nu
 - `mismatch_threshold`: Number of tolerated gaps in the fuzzy target search setp. We recommend leaving it to the default value of 6.
 - `read_length`: Fastq file read length, default is 151.
 - `PAM`: PAM sequence, default is NGG.
-- `genome`: used for homer peak annotation, e.g., hg19, hg38, mm9, or mm10.
-- `merged_analysis`: Whether or not the paired read merging step should takingTrue
-- `dedup_umi`: Whether or not the dedupliucation of UMIs step should takingTrue or False
-- `bc_pattern`: If umi deduplication is taking place, which barcode pattern should be given to UMI tools
+- `merged_analysis`: Whether or not the paired read merging step should taking (highly recommend not using) default = False
+- `dedup_umi`: Whether or not the dedupliucation of UMIs step should taking True or False, default = False
+- `bc_pattern`: If umi deduplication is taking place, which barcode pattern should be given to UMI tools, default=none
+- `normalize`: normalization method to use for replicates "none", "median" or "rpm", default=median
 
 # Commands
 
- Pipeline commands (must be run alongside samples command)
+### Pipeline commands (must be run alongside samples command)
 
 - `all`: runs all of the pipelines
-- `align`: merges (if indicated in parameters.csv) and aligns reads to ref genome
-- `identify`: identifies nominated off-target sites
+- `align`: merges (if indicated in parameters.csv), trims Tn5 adapters and aligns reads to ref genome
+- `identify`: identifies nominated off-target sites and annotates sites
 - `visualize`:annotates identified sites and creates alignment .svg image
-- `coverage`: create .bam file, alignment histogram and stats file for the identified sites
+- `qc`: create .bam file for identified sites for IGV, alignment histogram and alignment stats file and additional QC about fastq 
+- `analyze`: joines replicates if given, normalizes reads and creates additional plots
 - `variants`: *currently* updating
 
-Replicates can be combined seperate calling `replicate_combiner.py`, see below
+### Parameters
 
-### Samples
-
+- `analysis_folder`: The absolute path to the folder in which all pipeline outputs will be saved.
+- `raw_fastq_folder`:The absolute path to the folder in which all raw fastq files are stored.
 - `all`: runs all samples in manifest
 - `sample_name`: runs the specific sample indicated
 
-## Stand alone scripts
-
-### Replicate Combiner
-
-Normalizes sample replicates and combines counts into one .csv file. Also creates venn diagram, scatter plot and swarm plot
-
-```
-python path-to/IGU_CHANGEseq/changeseq/replicate_combiner.py --sample1 test_replicate1 --sample2 test_replicate2 --name test --output path-to/TEST_DATA/  --read_threshold 6
-```
-
-### Multisample combined
-
-in progess
 
 # Pipeline Output
 When running the full pipeline, the results of each step are outputted to the `output_folder` in a separate folder for each step. The output folders and their respective contents are as follows:
 
-.....
+TBC
