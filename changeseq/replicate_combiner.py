@@ -1,8 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')  # Use a non-GUI backend
+#matplotlib.use('Agg')  # Use a non-GUI backend
 from matplotlib_venn import venn2
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -56,26 +55,9 @@ def join_replicates(sample1_identified_file,sample2_identified_file,threshold = 
 
     return df
 
-def scatter_by_overlap(x1,x2,name):
-    x = np.log2(np.array(x1) + 1)
-    y = np.log2(np.array(x2) + 1)
-    pearR = np.corrcoef(x1, x2)[1, 0]
-    colors= ['#8FBC8F' if j != 0 and k !=0 else 'gray' for j,k in zip(x,y) ]
-    plt.figure(figsize=(4, 4))
-
-    plt.scatter(x, y, c=colors, label="r= %s" % (round(pearR, 3)))
-
-    #plt.scatter(x[x * y > 0], y[x * y > 0], color=colors.values()[1], label="r= %s" % (round(pearR, 3)))
-    plt.xticks(np.arange(np.log2(1), np.log2(100000), step=np.log2(10)), [0,10, 100, 1000, 10000, 100000])
-    plt.yticks(np.arange(np.log2(1), np.log2(100000), step=np.log2(10)), [0,10, 100, 1000, 10000, 100000])
-    plt.legend(loc=1)
-    #A = (x + y) / 2
-    #M = x - y
-    #plt.scatter(x=A, y=M, s=10, c = colors)  # s is point size
-    plt.title(name)
-    #plt.show()
 
 def swarm_plot(df,name,figout):
+    sns.set_style('white')
     x1, x2 = list(df['Nuclease_Read_Count.Rep1']), list(df['Nuclease_Read_Count.Rep2'])
     y = [(x + y) / 2 if (x * y) > 0 else x + y for x, y in zip(x1, x2)]
     y = np.log2(np.array(y))
@@ -90,7 +72,7 @@ def swarm_plot(df,name,figout):
         df.loc[(df['Site_Substitution_Number'] + df['RNA_Bulge'].fillna(0) + df['DNA_Bulge'].fillna(0) == 0), 'Shared'] = 'on target'
         df = df.sort_values('Shared',ascending = False)
         palette = ['#6D091F','royalblue', 'lightgrey']
-    plt.figure(figsize = (5,5))
+    plt.figure(figsize = (6,6))
     g = sns.swarmplot(data = df,
                       x= 'Guide Name',
                       y= 'Log2 Mean Reads',
@@ -182,14 +164,11 @@ def vennplot_replicates(joined,sample1,sample2,figout):
 
 def repCombiner(sample1,sample2,name,analysis_folder,read_threshold = 6):
     ## Input
-    # sample1, sample2  = "489_24631_R1", "489_24631_R2"
-    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/sgRNA_489_CHANGE-seq/'
-    # name = "NA24631 spCas9 PRF1 sgRNA_489"  # for labeling
+    # sample1, sample2  = "781_02471_rep1", "781_02471_rep2"
+    # analysis_folder = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_12/'
+    # name = "NA02471 spCas9 PRF1 sgRNA_781"  # for labeling
     # read_threshold = 6
-    print("Creating Replicates Folder")
-    output_folder = os.path.join(analysis_folder, "replicates")
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+
 
     ##  Inputs
     sample1_identified_file = analysis_folder + 'identified/' + sample1 + '_identified_matched_annotated.csv'
