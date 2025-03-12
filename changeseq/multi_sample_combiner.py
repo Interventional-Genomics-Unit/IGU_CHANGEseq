@@ -59,7 +59,7 @@ def find_mm_and_bulge(df):
 def parse_df(df,sample):
 
     ## Filling in Aligned and ungapped sequence
-    df.loc[:,['Aligned_Site_Sequence']} = df['Site_Sequence_Gaps_Allowed'].fillna(df['Site_Sequence'])
+    df.loc[:,['Aligned_Site_Sequence']]= df['Site_Sequence_Gaps_Allowed'].fillna(df['Site_Sequence'])
     df.loc[:,'Site_Sequence'] = df['Site_Sequence'].fillna(df['Site_Sequence_Gaps_Allowed'].str.replace("-", ""))
 
     df.loc[:, ['Aligned_Target_Sequence']] = df['Realigned_Target_Sequence'].replace('none', np.nan)
@@ -359,7 +359,7 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
 
     for sample in replicates['sample_name']:
         offtargets, target_seq, total_seq = make_offtarget_dict(joined_normalized,subset='Nuclease_Read_Count.' + sample)
-        alignment_plot = output_plot_folder + sample.replace(" ", "_") + "_postprocess_alignment_plot.svg"
+        alignment_plot = outfolder + sample.replace(" ", "_") + "_postprocess_alignment_plot.svg"
         draw_plot(target_seq, offtargets, total_seq, outfile=alignment_plot, title=sample, PAM=PAM)
 
     for i in range(len(replicates['sample_name'])-1):
@@ -368,8 +368,8 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
             sample_2 = replicates['sample_name'][j]
             x1, x2 = list(joined_normalized[f'Nuclease_Read_Count.{sample_1}']), list(
                 joined_normalized[f'Nuclease_Read_Count.{sample_2}'])
-            scatter_out = f"{output_plot_folder}{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
-            venn_out = f"{output_plot_folder}{sample_1}_&_{sample_2}_postprocess_venn.png"
+            scatter_out = f"{outfolder}{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
+            venn_out = f"{outfolder}{sample_1}_&_{sample_2}_postprocess_venn.png"
 
             scatter_plot(x1, x2,f"{sample_1} & {sample_2}", scatter_out)
             sim = vennplot_replicates(x1,x2,sample_1, sample_2, venn_out)

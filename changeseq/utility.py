@@ -66,6 +66,9 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
         else:
             return_dict[param] = default[param]
 
+    for x in ['window_size','gap_threshold','read_threshold']:
+        return_dict[x] = int(return_dict[x])
+
     return_dict['analysis_folder'] = analysis_folder
     return_dict['raw_fastq_folder'] = fq_dir
 
@@ -103,6 +106,7 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
     with open(yaml_fname, 'w') as yf:
         yaml.dump( return_dict, yf, default_flow_style=False)
     logger.info("yaml manifest file created")
+    #logger.info(return_dict)
 
 
     return return_dict
