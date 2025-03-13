@@ -47,7 +47,9 @@ class CircleSeq:
                 self.parameters['samples'][sample] = parameters['samples'][sample]
             # print (self.parameters)
             # Make folders for output
-            for folder in ['preprocessed','aligned', 'raw_output', 'fastq', 'variants','qc','processed_output']:
+            for folder in ['preprocessed','aligned', 'raw_results', 'fastq', 'variants','qc',
+                           'post-process_results','post-process_results/visualization','post-process_results/tables',
+                           'raw_results/visualizations','raw_results/tables']:
                 self.output_dir[folder] = os.path.join(self.parameters["analysis_folder"], folder)
                 if not os.path.exists(self.output_dir[folder]):
                     os.makedirs(self.output_dir[folder])
@@ -59,7 +61,7 @@ class CircleSeq:
 
             # initialize some default input file names for annotation files
             for sample in self.parameters['samples']:
-                self.annotation_file[sample] = f"{self.output_dir[ 'raw_output']}/{sample}_annotated_results.csv"
+                self.annotation_file[sample] = f"{self.output_dir[ 'raw_results/tables']}/{sample}_annotated_results.csv"
 
         except Exception as e:
             logger.error('Incorrect or malformed manifest file. Please ensure your manifest contains all required fields.')
@@ -70,7 +72,7 @@ class CircleSeq:
         for sample in self.parameters['samples']:
 
             # Trim tn5 adapter
-            if str(self.parameters['merged_analysis'][0]) != 'T':
+            if str(self.parameters['merged_analysis'])[0] != 'T':
                 sample_read1_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_R1_processesed.fastq.gz')
                 sample_read2_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',sample + '_R2_processesed.fastq.gz')
                 cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_trim_log.txt')
@@ -203,7 +205,7 @@ class CircleSeq:
             for sample in self.parameters['samples']:
                 bam, control_bam = self.findCleavageSites_input_bam[sample]
 
-                identified_sites_file = os.path.join(self.parameters["analysis_folder"],  'raw_output', sample)
+                identified_sites_file = os.path.join(self.parameters["analysis_folder"],  'raw_results/tables', sample)
 
                 findCleavageSites.compare(self.parameters['reference_genome'], bam, control_bam, self.parameters['samples'][sample]['target'],
                                           self.parameters['search_radius'], self.parameters['window_size'], self.parameters['mapq_threshold'], self.parameters['gap_threshold'],
@@ -220,7 +222,7 @@ class CircleSeq:
     def addAnnotations(self):
         for sample in self.parameters['samples']:
             try:
-                matched_file = f"{self.output_dir[ 'raw_output']}/{sample}_identified_matched.txt"
+                matched_file = f"{self.output_dir[ 'raw_results/tables']}/{sample}_identified_matched.txt"
                 print(f"Annotating {matched_file}")
                 annotate(matched_file, self.parameters['annotate_path'])
             except Exception as e:
@@ -230,8 +232,8 @@ class CircleSeq:
         logger.info('Visualizing off-target sites')
         for sample in self.parameters['samples']:
             try:
-                infile = os.path.join(self.parameters["analysis_folder"],  'raw_output',sample + '_identified_matched_annotated.csv')
-                outfile = os.path.join(self.parameters["analysis_folder"],  'raw_output', sample + '_offtargets')
+                infile = os.path.join(self.parameters["analysis_folder"],  'raw_results/tables',sample + '_identified_matched_annotated.csv')
+                outfile = os.path.join(self.parameters["analysis_folder"],  'raw_results/visualizations', sample + '_offtargets')
                 visualizeOfftargets(infile, outfile, title=sample,PAM=self.parameters["PAM"])
             except Exception as e:
                 logger.error('Error visualizing off-target sites.')
@@ -243,12 +245,12 @@ class CircleSeq:
             infiles = []
             qcfiles = []
             for sample in self.parameters['replicates'][rep_group_name]['sample_name']:
-                infiles.append(os.path.join(self.parameters["analysis_folder"], 'raw_output',
+                infiles.append(os.path.join(self.parameters["analysis_folder"], 'raw_results/tables',
                                             sample + '_identified_matched_annotated.csv'))
                 qcfiles.append(os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_qc_report.txt'))
             logger.info('Normalizing {rep_group_name}')
 
-            outfolder = os.path.join(self.parameters["analysis_folder"],'processed_output')
+            outfolder = os.path.join(self.parameters["analysis_folder"],'post-process_results')
             process_results(rep_group_name, replicates, infiles, qcfiles,
                             outfolder=outfolder,
                             normalization_method=self.parameters['normalize'],
@@ -304,8 +306,8 @@ class CircleSeq:
                 logger.info('Identifying genomic variants')
 
                 for sample in self.parameters['samples']:
-                    sorted_bam_file = os.path.join(self.parameters['analysis_folder'], 'coverage', sample + '_identified_matched_sorted.bam')
-                    identified_sites_file = os.path.join(self.parameters['analysis_folder'], 'identified', sample + '_identified_matched.txt')
+                    sorted_bam_file = os.path.join(self.parameters['analysis_folder'], 'qc', sample + '_identified_matched_sorted.bam')
+                    identified_sites_file = os.path.join(self.parameters['analysis_folder'], 'raw_results/tables/', sample + '_identified_matched.txt')
                     variants_basename = os.path.join(self.parameters['analysis_folder'], 'variants', sample)
 
                     callVariants.getVariants(identified_sites_file, self.parameters['reference_genome'], sorted_bam_file,

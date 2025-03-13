@@ -331,7 +331,7 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
 
     processed_outfile =outfolder + rep_group_name +'_joined.csv'
     simplified_report_outfile = processed_outfile.replace('.csv','_simplified.csv')
-    swarm_plot_out = outfolder + rep_group_name + "_postprocess_swarmplot.png"
+    swarm_plot_out = outfolder +'visualization'+ rep_group_name + "_postprocess_swarmplot.png"
 
     first_file = True
     for i,infile in enumerate(infiles):
@@ -350,7 +350,6 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
 
 
     joined_normalized, simplified_report = normalize(joined,qcfiles,normalization_method,read_threshold)
-
     joined_normalized.to_csv(processed_outfile, index = False)
     simplified_report.to_csv(simplified_report_outfile, index = False)
 
@@ -368,8 +367,8 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
             sample_2 = replicates['sample_name'][j]
             x1, x2 = list(joined_normalized[f'Nuclease_Read_Count.{sample_1}']), list(
                 joined_normalized[f'Nuclease_Read_Count.{sample_2}'])
-            scatter_out = f"{outfolder}{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
-            venn_out = f"{outfolder}{sample_1}_&_{sample_2}_postprocess_venn.png"
+            scatter_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
+            venn_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_venn.png"
 
             scatter_plot(x1, x2,f"{sample_1} & {sample_2}", scatter_out)
             sim = vennplot_replicates(x1,x2,sample_1, sample_2, venn_out)

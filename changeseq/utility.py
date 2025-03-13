@@ -66,8 +66,12 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
         else:
             return_dict[param] = default[param]
 
-    for x in ['window_size','gap_threshold','read_threshold']:
+    for x in ['window_size','gap_threshold','read_threshold','start_threshold','search_radius','mismatch_threshold','mapq_threshold','AG_read']:
         return_dict[x] = int(return_dict[x])
+
+    for x in ['merged_analysis','variant_analysis']:
+        return_dict[x] =False if return_dict[x] == 'False' or return_dict[x] == 'FALSE' else True
+
 
     return_dict['analysis_folder'] = analysis_folder
     return_dict['raw_fastq_folder'] = fq_dir
@@ -93,14 +97,14 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
 
     for i in range(num_samples):
         #sample_basename = [x[:x.find('_001.f') - 2] for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x][0]
-        sample_basename = [x for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x if '_R1_' in x][0]
-        control_basename = [x for x in fq_files if manifest_df.iloc[i]['control_sequencing_sample_name'] in x if '_R1_' in x][0]
+        sample_basename = [x for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x if '_R1_0' in x][0]
+        control_basename = [x for x in fq_files if manifest_df.iloc[i]['control_sequencing_sample_name'] in x if '_R1_0' in x][0]
         return_dict['samples'][ manifest_df.iloc[i]['sample_name']] = {}
         return_dict['samples'][manifest_df.iloc[i]['sample_name']]['target'] = manifest_df.iloc[i]['target']
         return_dict['samples'][manifest_df.iloc[i]['sample_name']]['read1'] = fq_dir + sample_basename
-        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['read2'] = fq_dir + sample_basename.replace("_R1_","_R2_")
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['read2'] = fq_dir + sample_basename.replace("_R1_0","_R2_0")
         return_dict['samples'][manifest_df.iloc[i]['sample_name']]['controlread1'] = fq_dir + control_basename
-        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['controlread2'] = fq_dir + control_basename.replace("_R1_","_R2_")
+        return_dict['samples'][manifest_df.iloc[i]['sample_name']]['controlread2'] = fq_dir + control_basename.replace("_R1_0","_R2_0")
         return_dict['samples'][manifest_df.iloc[i]['sample_name']]['description'] = str(manifest_df.iloc[i]['description'])
 
     with open(yaml_fname, 'w') as yf:

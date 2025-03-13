@@ -1,6 +1,5 @@
 from __future__ import print_function
 import argparse
-import itertools
 import gzip
 from utility import reverseComplement, fq
 
@@ -9,7 +8,7 @@ def mergeReads(fastq1_filename, fastq2_filename, out):
     fastq2_file = fq(fastq2_filename)
 
     with gzip.open(out, 'wb') as o:
-        for r1, r2 in itertools.izip(fastq1_file, fastq2_file):
+        for r1, r2 in zip(fastq1_file, fastq2_file):
             merged_sequence = reverseComplement(r1[1]) + r2[1]
             merged_quality_scores = r1[3][::-1] + r2[3]
             print(r1[0], file=o)
