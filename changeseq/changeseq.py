@@ -56,8 +56,8 @@ class CircleSeq:
 
             # Just to initialize some default input file names for the identify and visualization steps
             for sample in self.parameters['samples']:
-                self.findCleavageSites_input_bam[sample] = [f"{self.output_dir['aligned']}/{sample}_sorted.bam",
-                                                            f"{self.output_dir['aligned']}/control_{sample}_sorted.bam"]
+                self.findCleavageSites_input_bam[sample] = [f"{self.output_dir['aligned']}/{sample}_name_sorted.bam",
+                                                            f"{self.output_dir['aligned']}/control_{sample}_name_sorted.bam"]
 
             # initialize some default input file names for annotation files
             for sample in self.parameters['samples']:
@@ -188,10 +188,10 @@ class CircleSeq:
                                self.parameters['samples'][sample]['controlread2'],
                                control_sample_alignment_path)
                     self.aligned[sample] = sample_alignment_path
-                    self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_sorted.bam')
+                    self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_name_sorted.bam')
                     logger.info('Finished aligning reads to genome.')
-                    self.findCleavageSites_input_bam[sample] = [sample_alignment_path.replace(".sam","_sorted.bam"),
-                                                                control_sample_alignment_path.replace(".sam","_sorted.bam")]
+                    self.findCleavageSites_input_bam[sample] = [sample_alignment_path.replace(".sam","_name_sorted.bam"),
+                                                                control_sample_alignment_path.replace(".sam","_name_sorted.bam")]
 
             except Exception as e:
                 logger.error('Error aligning')
@@ -233,7 +233,7 @@ class CircleSeq:
         for sample in self.parameters['samples']:
             try:
                 infile = os.path.join(self.parameters["analysis_folder"],  'raw_results/tables',sample + '_identified_matched_annotated.csv')
-                outfile = os.path.join(self.parameters["analysis_folder"],  'raw_results/visualizations', sample + '_offtargets')
+                outfile = os.path.join(self.parameters["analysis_folder"],  'raw_results/visualizations', sample + '_offtargets.svg')
                 visualizeOfftargets(infile, outfile, title=sample,PAM=self.parameters["PAM"])
             except Exception as e:
                 logger.error('Error visualizing off-target sites.')
@@ -250,7 +250,7 @@ class CircleSeq:
                 qcfiles.append(os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_qc_report.txt'))
             logger.info('Normalizing {rep_group_name}')
 
-            outfolder = os.path.join(self.parameters["analysis_folder"],'post-process_results')
+            outfolder = os.path.join(self.parameters["analysis_folder"],'post-process_results/')
             process_results(rep_group_name, replicates, infiles, qcfiles,
                             outfolder=outfolder,
                             normalization_method=self.parameters['normalize'],

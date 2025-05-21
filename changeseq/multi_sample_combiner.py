@@ -127,7 +127,8 @@ def swarm_plot(joined_normalized, name, figout):
     # Highlight on target if present
     df.loc[df[['Site_Substitution_Number', 'RNA_Bulge', 'DNA_Bulge']].sum(1)==0, 'Shared'] = 'on target'
     df = df.sort_values('Shared', ascending=False)
-    palette = colors[0:len(columns)+1]
+    colors2 = ['#96C04B', '#7ACBC8', '#7c98d3', '#97FFFF']
+    palette = colors2[0:len(columns)+1]
     plt.figure(figsize=(6, 6))
     g = sns.swarmplot(data=df,
                       x='Guide Name',
@@ -145,8 +146,6 @@ def swarm_plot(joined_normalized, name, figout):
     # plt.show()
     plt.savefig(figout)
     plt.close(figout)
-
-
 
 def calc_jaccard(Rep1_unique,Rep2_unique,shared):
     total = Rep1_unique + Rep2_unique + shared
@@ -329,9 +328,9 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
     # normalization_method = 'median'
     # read_threshold,PAM = 6,'NGG'
 
-    processed_outfile =outfolder + rep_group_name +'_joined.csv'
+    processed_outfile =outfolder + "/tables/"+ rep_group_name +'_joined.csv'
     simplified_report_outfile = processed_outfile.replace('.csv','_simplified.csv')
-    swarm_plot_out = outfolder +'visualization'+ rep_group_name + "_postprocess_swarmplot.png"
+    swarm_plot_out = outfolder + "/visualization/"+ rep_group_name + "_postprocess_swarmplot.png"
 
     first_file = True
     for i,infile in enumerate(infiles):
@@ -358,7 +357,7 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
 
     for sample in replicates['sample_name']:
         offtargets, target_seq, total_seq = make_offtarget_dict(joined_normalized,subset='Nuclease_Read_Count.' + sample)
-        alignment_plot = outfolder + sample.replace(" ", "_") + "_postprocess_alignment_plot.svg"
+        alignment_plot = outfolder +"/visualization/"+ sample.replace(" ", "_") + "_postprocess_alignment_plot.svg"
         draw_plot(target_seq, offtargets, total_seq, outfile=alignment_plot, title=sample, PAM=PAM)
 
     for i in range(len(replicates['sample_name'])-1):

@@ -13,11 +13,13 @@ logger.propagate = False
 
 def alignReads(BWA_path, HG19_path, read1, read2, outfile):
 
-    sample_name = os.path.basename(outfile).split('.')[0]
+    sample_name = os.path.basename(outfile).split('.sam')[0]
     output_folder = os.path.dirname(outfile)
     base_name = os.path.join(output_folder, sample_name)
-    sam_filename = outfile
+    #sam_filename = outfile
     bam_filename = base_name + '.bam'
+    sorted_bam_file = f"{output_folder}/{sample_name}_sorted.bam"
+    name_sorted_bam_file = f"{output_folder}/{sample_name}_name_sorted.bam"
 
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -43,10 +45,17 @@ def alignReads(BWA_path, HG19_path, read1, read2, outfile):
 
     # Run paired end alignment against the genome
     logger.info('Running paired end mapping for {0}'.format(sample_name))
-    bwa_alignment_command = '{0} mem -t 48 {1} {2} {3} > {4}'.format(BWA_path, HG19_path, read1, read2, sam_filename)
-    samtools_sam_to_bam_command = 'samtools sort -o {0} {1}'.format(bam_filename, sam_filename)
-    samtools_index_command = 'samtools index {0}'.format(bam_filename)
-    samtools_sort_by_name_command = 'samtools sort -o {0} -n {1}'.format("".join([base_name, '_sorted.bam']), bam_filename)
+    bwa_alignment_command = f'{BWA_path} mem -t 48 {HG19_path} {read1} {read2} | samtools view -bS - > {bam_filename}'
+
+    # samtools sort
+    samtools_sort_command = f'samtools sort -o {bam_filename.replace(".bam","_sorted.bam")} {bam_filename}'
+    samtools_index_command = f'samtools index {bam_filename.replace(".bam","_sorted.bam")};rm {bam_filename}'
+    samtools_sort_by_name_command = f'samtools sort -o {name_sorted_bam_file} -n {sorted_bam_file}' #;samtools index {name_sorted_bam_file}'
+
+    #bwa_alignment_command = '{0} mem -t 48 {1} {2} {3} > {4}'.format(BWA_path, HG19_path, read1, read2, sam_filename)
+    #samtools_sam_to_bam_command = 'samtools sort -o {0} {1}'.format(bam_filename, sam_filename)
+    #samtools_index_command = 'samtools index {0}'.format(bam_filename)
+    #samtools_sort_by_name_command = 'samtools sort -o {0} -n {1}'.format("".join([base_name, '_sorted.bam']), bam_filename)
 
     # Open the outfile and redirect the output of the alignment to it.
     logger.info(bwa_alignment_command)
@@ -54,8 +63,8 @@ def alignReads(BWA_path, HG19_path, read1, read2, outfile):
     logger.info('Paired end mapping for {0} completed.'.format(sample_name))
 
     # Convert SAM to BAM file
-    logger.info(samtools_sam_to_bam_command)
-    subprocess.check_call(samtools_sam_to_bam_command, shell=True)
+    logger.info(samtools_sort_command)
+    subprocess.check_call(samtools_sort_command, shell=True)
     logger.info('Sorting by coordinate position for {0} complete.'.format(sample_name))
 
     # Index BAM file
@@ -67,3 +76,5 @@ def alignReads(BWA_path, HG19_path, read1, read2, outfile):
     logger.info(samtools_sort_by_name_command)
     subprocess.check_call(samtools_sort_by_name_command, shell=True)
     logger.info('Sorting for {0} by name complete.'.format(sample_name))
+
+    os.rename(sorted_bam_file + ".bai", name_sorted_bam_file + ".bai")

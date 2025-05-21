@@ -107,16 +107,20 @@ def tabulate_merged_start_positions(BamFileName, cells, name, targetsite, mapq_t
     Only consider alignments with matching positions from the beginning of the read.
     For read pairs with multiple alignments, pick the one with matching positions at the beginning.
 """
-def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshold, gap_threshold, outfile_base, pattern):
+def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshold, gap_threshold, outfile_base, pattern,all_chromosomes):
 
     output_filename = '{0}_coordinates.txt'.format(outfile_base)
 
     sorted_bam_file = HTSeq.BAM_Reader(BamFileName)
     filename_base = os.path.basename(BamFileName)
+   # ga = HTSeq.GenomicArray("auto", stranded=False)
+    #ga_windows = HTSeq.GenomicArray("auto", stranded=False)
+    #ga_stranded = HTSeq.GenomicArray("auto", stranded=True)
+    #ga_coverage = HTSeq.GenomicArray("auto", stranded=False)
 
     ga = HTSeq.GenomicArray("auto", stranded=False,typecode="i")
     ga_windows = HTSeq.GenomicArray("auto", stranded=False,typecode="i")
-    #ga_stranded = HTSeq.GenomicArray("auto", stranded=True)
+    ga_stranded = HTSeq.GenomicArray("auto", stranded=True)
     ga_coverage = HTSeq.GenomicArray("auto", stranded=False,typecode="i")
     read_count = 0
 
@@ -182,7 +186,7 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
 
             # We check whether or not the read was aligned by asking for 'first_read_chr'
             if first_read_chr:
-                if (first_read_chr == second_read_chr) and (pattern.match(str(first_read_chr))) and \
+                if (first_read_chr == second_read_chr) and (pattern.match(str(first_read_chr)) or all_chromosomes) and \
                         ((first_read.iv.strand == '+' and second_read.iv.strand == '-' and abs(first_read_position - second_read_position) <= gap_threshold) or
                              (second_read.iv.strand == '+' and first_read.iv.strand == '-' and abs(second_read_position - first_read_position) <= gap_threshold)):
 
@@ -190,14 +194,14 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
                     first_read_strand = "."
                     ga[HTSeq.GenomicPosition(first_read_chr, first_read_position, first_read_strand)] += 1
                     ga_windows[HTSeq.GenomicPosition(first_read_chr, first_read_position, first_read_strand)] = 1
-                    #ga_stranded[HTSeq.GenomicPosition(first_read_chr, first_read_position, first_read_strand)] += 1
+                    # ga_stranded[HTSeq.GenomicPosition(first_read_chr, first_read_position, first_read_strand)] += 1
 
 
                     second_read_strand = '.'
                     # if second_read_chr in ref_chr and second_read_position and second_read_strand:
                     ga[HTSeq.GenomicPosition(second_read_chr, second_read_position, second_read_strand)] += 1
                     ga_windows[HTSeq.GenomicPosition(second_read_chr, second_read_position, second_read_strand)] = 1
-                    #ga_stranded[HTSeq.GenomicInterval(second_read_chr, second_read_position, second_read_strand)] += 1
+                    # ga_stranded[HTSeq.GenomicInterval(second_read_chr, second_read_position, second_read_strand)] += 1
                     output = True
 
             # Output read positions for plotting. Add gap.
@@ -654,20 +658,20 @@ def compare(ref, bam, control, targetsite, search_radius, windowsize, mapq_thres
             print("Tabulate nuclease merged start positions.", file=sys.stderr)
             nuclease_ga, nuclease_ga_windows,  nuclease_ga_coverage, total_nuclease_count = \
                 tabulate_merged_start_positions(bam, cells, name, targetsite, mapq_threshold, gap_threshold,
-                                                start_threshold, out + '_NUCLEASE', pattern, read_length)
+                                                start_threshold, out + '_NUCLEASE', pattern,read_length)
             #nuclease_ga.write_bedgraph_file(output_filename.replace("count", "bedgraph"))
             print("Tabulate control merged start positions.", file=sys.stderr)
             control_ga, control_ga_windows, control_ga_coverage, total_control_count = \
                 tabulate_merged_start_positions(control, cells, name, targetsite, mapq_threshold, gap_threshold,
-                                                start_threshold, out + '_CONTROL', pattern,  read_length)
+                                                start_threshold, out + '_CONTROL', pattern,read_length)
         else:
             print("Tabulate nuclease standard start positions.", file=sys.stderr)
             outfile_base = out + '_NUCLEASE'
             nuclease_ga, nuclease_ga_windows, nuclease_ga_coverage, total_nuclease_count = \
-                tabulate_start_positions(bam, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_NUCLEASE', pattern)
+                tabulate_start_positions(bam, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_NUCLEASE', pattern,  all_chromosomes)
             print("Tabulate control standard start positions.", file=sys.stderr)
             control_ga, control_ga_windows,control_ga_coverage, total_control_count = \
-                tabulate_start_positions(control, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_CONTROL', pattern)
+                tabulate_start_positions(control, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_CONTROL', pattern,  all_chromosomes)
 
         # For all positions with detected read mapping positions, put into a combined genomicArray
         for iv, value in nuclease_ga.steps():

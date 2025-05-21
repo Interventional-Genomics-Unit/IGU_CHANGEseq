@@ -1,15 +1,16 @@
 #!/bin/bash
 #SBATCH --job-name IGU_CHANGEseq
+#SBATCH -n 32
 #SBATCH -o %j.out
 #SBATCH -e %j.err
 
 
 ## ACTIVATE CONDA
 eval "$(conda shell.bash hook)"
-conda activate cseq3
-
+conda activate changeseqbe
+SCRIPT_PATH=/home/thudson/projects/IGU_CHANGEseq/CHANGEseq_wrapper.sh
 # Get the directory where the script is located
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+SCRIPT_DIR="$(dirname "$(realpath "$SCRIPT_PATH")")"
 
 # Now you can reference this directory in your script
 echo "parameters manifest(csv): $1"

@@ -21,8 +21,6 @@ def fastqQC(read1, read2,logfile):
     subprocess.check_call(fastp_command, shell=True)
     logger.info('QC for {0} completed.'.format(sample_name))
 
-
-
 def trim_tn5(read1, read2, read1_out, read2_out, Tn5, cutadapt,cutadapt_logfile):
 
     # Run QC
