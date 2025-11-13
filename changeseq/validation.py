@@ -5,18 +5,20 @@ validation.py
 Contains utils for validating the filetype and existence of manifest-defined files/folders
 
 """
-
 import logging
 import os
 import sys
 from distutils.spawn import find_executable
 
 logger = logging.getLogger('root')
+logger.propagate = False
 
 
 def exists(filepath):
     if not os.path.isfile(filepath):
         logger.error('{0} does not exist'.format(filepath))
+        return False
+    return True
         #sys.exit()
 
 

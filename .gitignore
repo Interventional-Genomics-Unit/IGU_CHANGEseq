@@ -1,2 +1,4 @@
 /changeseq/unconnected_scripts/
 CHANGEseq_wrapper.sh
+make_yaml.py
+/changeseq/replicate_combiner.py

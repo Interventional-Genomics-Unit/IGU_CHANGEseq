@@ -8,11 +8,15 @@ import regex
 from statsmodels.distributions.empirical_distribution import ECDF
 import sys
 import numpy as np
+import logging
 
 """ Tabulate merged start positions.
     Identify genomic coordinates for reads mapping across 151/152 bp position.
     Add positions to genomic array.
 """
+logger = logging.getLogger('root')
+logger.propagate = False
+
 def is_outie(x,y):
 	if x.is_reverse:
 		if not y.is_reverse:

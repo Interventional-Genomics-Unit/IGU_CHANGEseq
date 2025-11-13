@@ -1,13 +1,17 @@
 import subprocess
-import os
 from Bio.Seq import Seq
 import pandas as pd
+import logging
 
+logger = logging.getLogger('root')
+logger.propagate = False
+
+## by T.Hudson
 
 class Transcript:
 
 
-    tx_lib = {} #tid : []
+    tx_lib = {}
     coord2tid = {}
     labels = ['chrom', 'txStart', 'txEnd', 'strand', 'tid', 'eid', 'name',
               'cdsStart', 'cdsEnd', 'exonStarts', 'exonEnds', 'exonFrames']
@@ -52,18 +56,12 @@ class Transcript:
 
     @classmethod
     def load_transcripts(cls, annote_path,snvcoords):
-        # print('DANIEL WE MIGHT NEED TO MAKE A TEMP FOLDER')
-        # print('SEE load_transcripts in annotate.py')
-        #temp_bedfname = "temp_in.bed"
-        #temp_bedfname_sorted = "temp_in_sorted.bed"
-
         bed_data = ""
 
         #reset dict
         cls.coord2tid = {}
         cls.tx_lib = {}
 
-        #with open(temp_bedfname, 'w') as tempbed:
         for coord in snvcoords:
             coord_field = coord.split(':')
             chrom = coord_field[0]
@@ -72,9 +70,7 @@ class Transcript:
             line = "\t".join([chrom, start, end])
             bed_data += line + "\n"
 
-        #cmd = 'bedtools window -w 50 -a ' + temp_bedfname + ' -b ' + annote_path
 
-        #Sort bedfile
         sort_cmd = ['bedtools', 'sort', '-i', "stdin"]
 
         sorted_bed = subprocess.Popen(
@@ -90,10 +86,11 @@ class Transcript:
         #find closest ORFS
         # Check for errors in the sorting step
         if sort_error:
-            print("Error during sorting:", sort_error)
+            logging.error(f"Error during bedtools sorting of off-target sites:\n {sort_error}")
         else:
             # Pipe the sorted BED data directly to `bedtools window`
             window_cmd = ["bedtools", "closest", "-a",  "stdin", "-b", annote_path]
+            logging.info(" ".join(window_cmd))
             window_output = subprocess.Popen(
                 window_cmd,
                 stdin=subprocess.PIPE,
@@ -109,15 +106,8 @@ class Transcript:
             if window_output.returncode == 0:
                 pass
             else:
-                print("Error:", stderr)
+                logging.error(f"Error during bedtools closest command:\n {stderr}")
 
-        #cmd = 'bedtools closest -a ' + temp_bedfname_sorted + ' -b ' + annote_path
-        #bed_popen = Popen(cmd, shell=True, stdout=PIPE)
-        #bedtools_out = bed_popen.communicate()[0]
-        #et = bed_popen.wait()
-
-        #if ret != 0:
-         #   print("Bedtools process was interrupted!")
 
         if bedtools_out != '':
             bed_entries = bedtools_out.split('\n')[:-1]
@@ -247,10 +237,10 @@ class Transcript:
 
 
         elif self.entry['tid'].startswith('NR'):
-            feature = 'non-coding RNA'
+            feature = 'ncRNA'
 
         elif 'cdsStart' not in self.entry.keys() :
-            feature = 'Not Found'
+            feature = 'unknown'
 
         elif self.exons == None or t_snvpos < -50 or t_snvpos > self.tx_len + 50:
             # not in transcript - shouldn't happen or else no entry would be found
@@ -264,34 +254,28 @@ class Transcript:
             else:
                 feature = '3utr' if self.entry['strand'] == '+' else '5utr'
 
+        elif t_snvpos in range(self.exons[0][0],self.exons[0][0]+4) or t_snvpos in range(self.exons[-1][-1]-3, self.exons[-1][-1]+1):
+
+            if t_snvpos in range(self.exons[0][0],self.exons[0][0]+4):
+                feature = "start_codon" if self.entry['strand'] == '+' else 'stop_codon'
+            else:
+
+                feature = 'stop_codon' if self.entry['strand'] == '+' else 'start_codon'
 
         else:# find if exon or intron
-            feature = 'intron'
             exon_n = 0
+            feature = 'intron'
             for x in self.exons:
                 # if in exon find reading frame
-                if t_snvpos in range(x[0], x[1] + 1):
-                    feature = 'exon'
-                    dist = sum([e[1] - e[0] for e in self.exons[0:exon_n]])
-                    dist_from_cds_start = dist + (t_snvpos - x[0])
-                    len_cds = sum([e[1] - e[0] for e in self.exons])
-
-                    if self.entry['strand'] == '-':
-                        dist_from_cds_start = (len_cds - dist_from_cds_start) + 1
-
-                    if dist_from_cds_start < 3:
-                        feature = 'start_codon'
-
-                    if dist_from_cds_start > len_cds - 3:
-                        feature = 'stop_codon'
-
-                    rf = self.find_reading_frame(dist_from_cds_start)
-                    break
-                elif abs(t_snvpos - x[0]) <= 3 or abs(t_snvpos - x[1]) <= 3:
+                if abs(t_snvpos - x[0]) <=3 or abs(t_snvpos - x[1]) <=3:
                     feature = 'splice site'
                     break
+                elif t_snvpos in range(x[0], x[1] + 1):
+                    feature = 'exon'
+                    break
                 else:
-                    feature = 'intron'
+                    pass
+
                 exon_n += 1
 
 
@@ -322,21 +306,7 @@ def annotate(identify_file, annotate_path):
             Gene_Name.append(tx.tx_info()[2])
 
     res_data['Gene_Name'] = Gene_Name
-    #res_data['Gene_Type'] = Gene_Type
-    #res_data['Gene_ID'] = Gene_ID
     res_data['Feature'] = Feature
     res_data = res_data.sort_values('Nuclease_Read_Count',ascending = False)
     outfile_name = identify_file.strip('.txt') +'_annotated.csv'
-    print(outfile_name)
     res_data.to_csv(outfile_name, index = False)
-
-
-
-##set input
-
-# data_dir =os.path.dirname(os.path.realpath(__file__)) +"/changeseq/test/data/MergedOutput/identified/"
-# annot_dir = '/groups/clinical/projects/clinical_shared_data/hg38/annotations/'
-# data_dir = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_06/identified/"
-# annotate_path = '/groups/clinical/projects/editability/tables/processed_tables/ncbiRefSeq.bed.gz'
-#  identify_files = [data_dir + x for x in os.listdir(data_dir) if x.endswith('_matched.txt')]
-# identify_file = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_06/identified/spCas9_78_ALT7_R2_06_identified_matched.txt"

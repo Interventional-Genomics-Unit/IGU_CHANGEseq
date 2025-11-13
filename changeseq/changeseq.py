@@ -14,7 +14,7 @@ import sys
 import subprocess
 import traceback
 import log
-from utility import get_parameters
+from utility import get_parameters, make_folders, copy_control_samples,check_control_exists
 from copy import deepcopy as dp
 import findCleavageSites
 import callVariants
@@ -25,7 +25,7 @@ from fastq_qc import fastqQC,trim_tn5
 
 logger = log.createCustomLogger('root')
 global p_dir
-p_dir = os.path.dirname(os.path.realpath(__file__))
+p_dir = os.path.dirname(os.path.realpath(findCleavageSites.__file__))
 
 class CircleSeq:
     def __init__(self):
@@ -41,18 +41,16 @@ class CircleSeq:
         try:
             parameters = get_parameters(analysis_folder,fq_dir,manifest,settings)
             self.parameters = dp(parameters)
-
+            self.representative_controls = copy_control_samples(self.parameters['samples'])
             if sample != 'all':
                 self.parameters['samples'] = {}
                 self.parameters['samples'][sample] = parameters['samples'][sample]
-            # print (self.parameters)
+
+            # set control
+            self.representative_controls = copy_control_samples(self.parameters['samples'])
+
             # Make folders for output
-            for folder in ['preprocessed','aligned', 'raw_results', 'fastq', 'variants','qc',
-                           'post-process_results','post-process_results/visualization','post-process_results/tables',
-                           'raw_results/visualizations','raw_results/tables']:
-                self.output_dir[folder] = os.path.join(self.parameters["analysis_folder"], folder)
-                if not os.path.exists(self.output_dir[folder]):
-                    os.makedirs(self.output_dir[folder])
+            self.output_dir = make_folders(self.parameters["analysis_folder"])
 
             # Just to initialize some default input file names for the identify and visualization steps
             for sample in self.parameters['samples']:
@@ -68,71 +66,80 @@ class CircleSeq:
             sys.exit()
 
     def processReads(self):
-
+        if self.parameters['merged_analysis']:
+            pass
         for sample in self.parameters['samples']:
 
-            # Trim tn5 adapter
-            if str(self.parameters['merged_analysis'])[0] != 'T':
-                sample_read1_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_R1_processesed.fastq.gz')
-                sample_read2_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',sample + '_R2_processesed.fastq.gz')
-                cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_trim_log.txt')
 
-                trim_tn5(self.parameters['samples'][sample]['read1'],
-                         self.parameters['samples'][sample]['read2'],
-                         sample_read1_outfile,
-                         sample_read2_outfile,
-                         Tn5=self.parameters['changeseq_adapter'],
-                         cutadapt=self.parameters['cutadapt'],
-                         cutadapt_logfile = cutadapt_logfile)
+        # Trim tn5 adapter
+            sample_read1_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_R1_processesed.fastq.gz')
+            sample_read2_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',sample + '_R2_processesed.fastq.gz')
+            cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_trim_log.txt')
 
-                self.parameters['samples'][sample]['read1'] = sample_read1_outfile
-                self.parameters['samples'][sample]['read2'] = sample_read2_outfile
-                cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_control_trim_log.txt')
-                control_read1_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
-                                                    sample + '_R1_processesed_control.fastq.gz')
-                control_read2_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
-                                                    sample + '_R2_processesed_control.fastq.gz')
-                trim_tn5(self.parameters['samples'][sample]['controlread1'],
-                         self.parameters['samples'][sample]['controlread2'],
-                         control_read1_outfile,
-                         control_read2_outfile,
-                         Tn5 = self.parameters['changeseq_adapter'],
-                         cutadapt = self.parameters['cutadapt'],
-                         cutadapt_logfile = cutadapt_logfile)
-                self.parameters['samples'][sample]['controlread1'] = control_read1_outfile
-                self.parameters['samples'][sample]['controlread2'] = control_read2_outfile
+            trim_tn5(self.parameters['samples'][sample]['read1'],
+                     self.parameters['samples'][sample]['read2'],
+                     sample_read1_outfile,
+                     sample_read2_outfile,
+                     Tn5=self.parameters['changeseq_adapter'],
+                     cutadapt=self.parameters['cutadapt'],
+                     cutadapt_logfile = cutadapt_logfile)
 
-            if self.parameters['dedup_umi']:
+            self.parameters['samples'][sample]['read1'] = sample_read1_outfile
+            self.parameters['samples'][sample]['read2'] = sample_read2_outfile
 
-                from deduplicate import deduplicateReads
-                logger.info('Deduplicating UMIs...')
-
-                for sample in self.parameters['samples']:
-                    sample_processed_read1_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_R1_preprocessed.fastq.gz')
-                    sample_processed_read2_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed',sample + '_R2_preprocessed.fastq.gz')
-                    control_processed_read1_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed', 'control_' + sample +
-                                                               '_R1_preprocessed.fastq.gz')
-                    control_processed_read2_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed','control_' +
-                                                               sample + '_R2_preprocessed.fastq.gz')
-                    deduplicateReads(self.parameters['bc_pattern'],
-                                     self.parameters['samples'][sample]['read1'],
-                                     self.parameters['samples'][sample]['read2'],
-                                     sample_processed_read1_path,
-                                     sample_processed_read2_path)
-                    self.parameters['samples'][sample]['read1'] = sample_processed_read1_path
-                    self.parameters['samples'][sample]['read2'] = sample_processed_read2_path
+            cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_control_trim_log.txt')
+            control_read1_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
+                                                 sample + '_R1_processesed_control.fastq.gz')
+            control_read2_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
+                                                 sample + '_R2_processesed_control.fastq.gz')
 
 
-                    deduplicateReads(self.parameters['bc_pattern'],
-                                     self.parameters['samples'][sample]['controlread1'],
-                                     self.parameters['samples'][sample]['controlread2'],
-                                     control_processed_read1_path,
-                                     control_processed_read2_path)
-                    self.parameters['samples'][sample]['controlread1'] = control_processed_read1_path
-                    self.parameters['samples'][sample]['controlread2'] = control_processed_read2_path
+            for f in [cutadapt_logfile,control_read1_outfile,control_read2_outfile]:
+                run_control_flag = check_control_exists(sample=sample, representative_control = self.representative_controls[sample], control_outfile=f)
+                if run_control_flag:
+
+                    trim_tn5(self.parameters['samples'][sample]['controlread1'],
+                             self.parameters['samples'][sample]['controlread2'],
+                             control_read1_outfile,
+                             control_read2_outfile,
+                             Tn5 = self.parameters['changeseq_adapter'],
+                             cutadapt = self.parameters['cutadapt'],
+                             cutadapt_logfile = cutadapt_logfile)
+                    break
+            self.parameters['samples'][sample]['controlread1'] = control_read1_outfile
+            self.parameters['samples'][sample]['controlread2'] = control_read2_outfile
+
+            # if self.parameters['dedup_umi']:
+            #
+            #     from deduplicate import deduplicateReads
+            #     logger.info('Deduplicating UMIs...')
+            #
+            #     for sample in self.parameters['samples']:
+            #         sample_processed_read1_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_R1_preprocessed.fastq.gz')
+            #         sample_processed_read2_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed',sample + '_R2_preprocessed.fastq.gz')
+            #         control_processed_read1_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed', 'control_' + sample +
+            #                                                    '_R1_preprocessed.fastq.gz')
+            #         control_processed_read2_path = os.path.join(self.parameters["analysis_folder"], 'preprocessed','control_' +
+            #                                                    sample + '_R2_preprocessed.fastq.gz')
+            #         deduplicateReads(self.parameters['bc_pattern'],
+            #                          self.parameters['samples'][sample]['read1'],
+            #                          self.parameters['samples'][sample]['read2'],
+            #                          sample_processed_read1_path,
+            #                          sample_processed_read2_path)
+            #         self.parameters['samples'][sample]['read1'] = sample_processed_read1_path
+            #         self.parameters['samples'][sample]['read2'] = sample_processed_read2_path
+            #
+            #         deduplicateReads(self.parameters['bc_pattern'],
+            #                          self.parameters['samples'][sample]['controlread1'],
+            #                          self.parameters['samples'][sample]['controlread2'],
+            #                          control_processed_read1_path,
+            #                          control_processed_read2_path)
+            #         self.parameters['samples'][sample]['controlread1'] = control_processed_read1_path
+            #         self.parameters['samples'][sample]['controlread2'] = control_processed_read2_path
 
 
     def alignReads(self):
+
         if self.parameters['merged_analysis']:
             logger.info('Merging reads...')
             try:
@@ -144,9 +151,13 @@ class CircleSeq:
                     mergeReads(self.parameters['samples'][sample]['read1'],
                                 self.parameters['samples'][sample]['read2'],
                                sample_merge_path)
-                    mergeReads(self.parameters['samples'][sample]['controlread1'],
-                                 self.parameters['samples'][sample]['controlread2'],
-                               control_sample_merge_path)
+
+
+                    run_control_flag = check_control_exists(sample=sample, representative_control = self.representative_controls[sample], control_outfile=control_sample_merge_path)
+                    if run_control_flag:
+                        mergeReads(self.parameters['samples'][sample]['controlread1'],
+                                     self.parameters['samples'][sample]['controlread2'],
+                                   control_sample_merge_path)
 
                     sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '.sam')
                     control_sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', 'control_' + sample + '.sam')
@@ -157,14 +168,23 @@ class CircleSeq:
                                '',
                                sample_alignment_path)
 
-                    alignReads(self.parameters['bwa'],
-                               self.parameters['reference_genome'],
-                               control_sample_merge_path,
-                               '',
-                               control_sample_alignment_path)
+                    for ext in ["_name_sorted.bam", "_name_sorted.bam.bai"]:
+                        run_control_flag = check_control_exists(sample=sample,
+                                                                representative_control=self.representative_controls[
+                                                                    sample],
+                                                                control_outfile=control_sample_alignment_path.replace(
+                                                                    ".sam", ext))
+                        if run_control_flag:
+
+                            alignReads(self.parameters['bwa'],
+                                       self.parameters['reference_genome'],
+                                       control_sample_merge_path,
+                                       '',
+                                       control_sample_alignment_path)
+                            break
 
                     self.merged[sample] = sample_alignment_path
-                    logger.info('Finished merging and aligning reads.')
+                logger.info('Finished merging and aligning reads.')
 
             except Exception as e:
                 logger.error('Error aligning')
@@ -182,11 +202,18 @@ class CircleSeq:
                                self.parameters['samples'][sample]["read1"],
                                self.parameters['samples'][sample]["read2"],
                                sample_alignment_path)
-                    alignReads(self.parameters['bwa'],
-                               self.parameters['reference_genome'],
-                               self.parameters['samples'][sample]['controlread1'],
-                               self.parameters['samples'][sample]['controlread2'],
-                               control_sample_alignment_path)
+
+                    for ext in ["_name_sorted.bam","_name_sorted.bam.bai"]:
+                        run_control_flag = check_control_exists(sample=sample,
+                                                                representative_control=self.representative_controls[sample],
+                                                                control_outfile=control_sample_alignment_path.replace(".sam",ext))
+                        if run_control_flag:
+                            alignReads(self.parameters['bwa'],
+                                       self.parameters['reference_genome'],
+                                       self.parameters['samples'][sample]['controlread1'],
+                                       self.parameters['samples'][sample]['controlread2'],
+                                       control_sample_alignment_path)
+                            break
                     self.aligned[sample] = sample_alignment_path
                     self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_name_sorted.bam')
                     logger.info('Finished aligning reads to genome.')
@@ -226,7 +253,7 @@ class CircleSeq:
                 print(f"Annotating {matched_file}")
                 annotate(matched_file, self.parameters['annotate_path'])
             except Exception as e:
-                print('Error Annotating for sample %s.' % (sample))
+                logger.error('Error Annotating for sample %s.' % (sample))
 
     def visualize(self):
         logger.info('Visualizing off-target sites')
@@ -285,6 +312,7 @@ class CircleSeq:
 
         except Exception as e:
             logger.error('Error with alignment coverage QC ')
+            logger.error('skipping....')
 
         try:
             for sample in self.parameters['samples']:
@@ -462,6 +490,11 @@ def main():
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
         c.alignReads()
+        c.findCleavageSites()
+        c.addAnnotations()
+        c.visualize()
+        c.analyze()
+        c.QC()
     elif args.command == 'identify':
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
@@ -473,6 +506,8 @@ def main():
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
         c.addAnnotations()
         c.visualize()
+        c.analyze()
+        c.QC()
     elif args.command == 'analyze':
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)

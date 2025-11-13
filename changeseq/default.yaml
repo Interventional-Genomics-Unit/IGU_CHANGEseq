@@ -1,6 +1,5 @@
 annotate_path: /home/thudson/projects/IGU_CHANGEseq/changeseq/data/ncbiRefSeq.bed.gz
 reference_genome:  /groups/clinical/projects/clinical_shared_data/hg38/hg38.fa
-raw_fastq_folder: /groups/clinical/projects/Assay_Dev/CHANGEseq/CS_12/raw_fqs/
 changeseq_adapter: CTGTCTCTTATACACATCT
 cutadapt: cutadapt
 njobs: 6
@@ -11,6 +10,7 @@ bwa: bwa
 dedup_umi: FALSE
 analysis_folder: data/StandardOutput/
 search_radius: 30
+normalize: median
 read_threshold: 6
 gap_threshold: 5
 merged_analysis: FALSE

@@ -4,12 +4,16 @@ import gzip
 import validation
 import yaml
 import os
-import log
+import logging
 import pandas as pd
+import subprocess
+import sys
+from collections import OrderedDict
 """
 FASTQ generator function from umi package
 """
-logger = log.createCustomLogger('root')
+logger = logging.getLogger('root')
+logger.propagate = False
 
 def write_default_yaml(param_name,param):
     default_yaml = os.path.dirname(os.path.realpath(validation.__file__)) + "/default.yaml"
@@ -19,6 +23,16 @@ def write_default_yaml(param_name,param):
     print(f"Storing {param_name} as {param}")
     with open(default_yaml, "w") as f:
         yaml.dump(default,f,default_flow_style=False)
+
+def make_folders(analysis_folder):
+    output_dir ={}
+    for folder in ['preprocessed', 'aligned', 'raw_results', 'fastq', 'variants', 'qc',
+                   'post-process_results', 'post-process_results/visualization', 'post-process_results/tables',
+                   'raw_results/visualizations', 'raw_results/tables']:
+        output_dir[folder] = os.path.join(analysis_folder, folder)
+        if not os.path.exists(output_dir[folder]):
+            os.makedirs(output_dir[folder])
+    return output_dir
 
 def fq(file):
     if re.search('.gz$', file):
@@ -54,9 +68,10 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
     manifest_df = pd.read_csv(sample_manifest)
     if settings != 'default':
         settings = f'{analysis_folder}/{os.path.basename(settings)}'
-        logger.info("importing settings loaded")
+        logger.info(f"custom settings loading from file {settings}")
         settings_dict = pd.read_csv(settings, names=['parameter', 'setting']).set_index('parameter').to_dict()['setting']
     else:
+        logger.info(f"using default settings")
         settings_dict = {}
 
     return_dict = {}
@@ -68,9 +83,11 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
 
     for x in ['window_size','gap_threshold','read_threshold','start_threshold','search_radius','mismatch_threshold','mapq_threshold','AG_read']:
         return_dict[x] = int(return_dict[x])
+        logger.info(f'{x} is set to {str(return_dict[x])}')
 
     for x in ['merged_analysis','variant_analysis']:
-        return_dict[x] =False if return_dict[x] == 'False' or return_dict[x] == 'FALSE' else True
+        return_dict[x] =False if str(return_dict[x]) == 'False' or str(return_dict[x]) == 'FALSE' else True
+        logger.info(f'{x} is set to {str(return_dict[x])}')
 
 
     return_dict['analysis_folder'] = analysis_folder
@@ -99,6 +116,13 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
         #sample_basename = [x[:x.find('_001.f') - 2] for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x][0]
         sample_basename = [x for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x if '_R1_0' in x][0]
         control_basename = [x for x in fq_files if manifest_df.iloc[i]['control_sequencing_sample_name'] in x if '_R1_0' in x][0]
+        if len(sample_basename)==0:
+            logger.error('fastq file for {0} is not detected'.format(manifest_df.iloc[i]['sequencing_sample_name']))
+            sys.exit()
+        if len(control_basename)==0:
+            logger.error('fastq file for {0} is not detected'.format(manifest_df.iloc[i]['control_sequencing_sample_name']))
+            sys.exit()
+
         return_dict['samples'][ manifest_df.iloc[i]['sample_name']] = {}
         return_dict['samples'][manifest_df.iloc[i]['sample_name']]['target'] = manifest_df.iloc[i]['target']
         return_dict['samples'][manifest_df.iloc[i]['sample_name']]['read1'] = fq_dir + sample_basename
@@ -114,5 +138,42 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
 
 
     return return_dict
+
+def copy_control_samples(samples):
+    # changeseq is built to run every control with every sample except, usually theres only one control for all samples
+    # ro by pass this just copy one control for all
+    representative_controls = {}
+    controlreads = {}
+    for sample, info in samples.items():
+        if samples[sample]['controlread1'] not in controlreads.keys():
+            controlreads[samples[sample]['controlread1']] = []
+        controlreads[samples[sample]['controlread1']].append(sample)
+    for controlread, samples in controlreads.items():
+        representative = samples[0]
+        for s in samples:
+            representative_controls[s] = representative
+    return representative_controls
+
+
+def check_control_exists(sample,representative_control,control_outfile):
+    run_control_flag = True
+    representative_control_file = control_outfile.replace(sample,representative_control)
+    if sample != representative_control:
+        if validation.exists(representative_control_file):
+            run_control_flag = False
+            make_control_copy(representative_control_file, control_outfile)
+    else:
+        logger.info(f'representative control does not exsists, running control for {sample}')
+    return run_control_flag
+
+def make_control_copy(representative_control_file,control_outfile):
+    # copies control files that the sample
+    logger.info(f'skipping re-run of {control_outfile}')
+    cmd = f'cp {representative_control_file} {control_outfile}'
+    logger.info(cmd)
+    subprocess.check_call(cmd, shell=True)
+    logger.info('done.')
+
+
 
 

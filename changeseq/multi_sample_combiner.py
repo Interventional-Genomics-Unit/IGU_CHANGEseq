@@ -7,10 +7,8 @@ from matplotlib_venn import venn2
 from visualize import *
 
 global colors
-colors = ['#EC5121', '#96C04B', '#FFAC0F', '#7ACBC8', '#97FFFF']
-
-logger = logging.getLogger('root')
-logger.propagate = False
+colors = {'sample1': '#8FBC8F',
+          'sample2': '#029386'}  # , 'T': '#D8BFD8', 'C': '#8FBC8F', 'N': '#AFEEEE', 'R': '#3CB371', '-': '#E6E6FA'}
 
 def check_file(file):
     if os.path.isfile(file):
@@ -395,7 +393,7 @@ def main():
     args = parse_args()
     try:
         replicates = {'sample_name': args.replicate_sample_names.split(",")}
-        process_results(args.name,replicates,args.infiles,qcfiles,analysis_folder, normalization_method,read_threshold,PAM)
+        process_results(args.name,replicates,args.infiles,args.qcfiles,args.analysis_folder, args.normalization_method,args.read_threshold,args.PAM)
         process_results(args.file, args.name, args.output, args.read_threshold)
     except Exception as e:
         print('Error combined replicates')

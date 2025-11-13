@@ -9,7 +9,7 @@ IGU Added Features:
 * removal of TN5 ME adapters and illumina adapter (unmerged version only)
 * Optional UMI deduplication
 * replicate combination
-* normalization of replicates - (median-of-ratios or total count scaling)
+* normalization of replicates - (median-of-ratios or rpm)
 * QC metrics of alignments and fastq circularization read composition
 * identified site bam file for use with IGV
 * genomic annotation to sites
@@ -38,7 +38,7 @@ cd /your-path/IGU_CHANGEseq/
 python changeseq/changeseq.py makefiles
 ```
  
-# Usage
+## Usage
 
 The Tsai lab change-seq pipeline requires a manifest yaml file specifying input files, output directory, and pipeline parameters. 
 In the IGU version this file is split into t two csv files 1) a sample manifest file <code>--manifest</code> 2) an optional settings 
@@ -54,7 +54,7 @@ cd /your-path/IGU_CHANGEseq/
 python changeseq/changeseq.py all --analysis_folder /your-path/IGU_CHANGEseq/changeseq/test/Standard_Output --raw_fastq_folder /your-path/IGU_CHANGEseq/changeseq/test/input --settings unmerged_parameters.csv --manifest manifest.csv --sample all
 ```
 
-# Writing the Sample Manifest
+### Writing the Sample Manifest
 The original manifest.yaml is no longer used in this version. The prior manifest.yaml is now split into two .csv input files. 
 The manifest file has the following .csv file 
 
@@ -67,7 +67,7 @@ The manifest file has the following .csv file
 - `replicate_group_name`: (optional) an identifier that designates replicate samples. This must be present to run normalization  
      
 
- # Parameters and Setting
+ ### Parameters and Setting
  This file is a .csv with the first column the parameter name and the second column the parameter name. 
  The parameters are now stored internally and only need to be given if different than default
  See IGU_CHANGEseq/changeseq/test/parameters.csv
@@ -89,7 +89,6 @@ The manifest file has the following .csv file
 - `bc_pattern`: If umi deduplication is taking place, which barcode pattern should be given to UMI tools, default=none
 - `normalize`: normalization method to use for replicates "none", "median" or "rpm", default=median
 
-# Commands
 
 ### Pipeline commands (must be run alongside samples command)
 
@@ -109,7 +108,7 @@ The manifest file has the following .csv file
 - `sample_name`: runs the specific sample indicated
 
 
-# Pipeline Output
+## Pipeline Output
 When running the full pipeline, the results of each step are outputted to the `output_folder` in a separate folder for each step. The output folders and their respective contents are as follows:
 
 TBC
