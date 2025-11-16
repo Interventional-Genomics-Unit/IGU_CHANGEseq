@@ -104,13 +104,14 @@ def find_PAM(seq,PAM):
     except:# PAM on the left
         left_search = SeqUtils.nt_search(seq[:len(PAM)], PAM)
         if len(left_search)>1:
+            logger.info('5\' PAM detected')
             PAM_index = left_search[1]
         else:
             right_search = SeqUtils.nt_search(seq[-len(PAM):], PAM)
             if len(right_search)>1:
                 PAM_index = len(seq)-len(PAM)
             else:
-                print ("PAM: %s not found in %s. Set PAM index to 20"%(PAM,seq))
+                logger.info("PAM: %s not found in %s. Set PAM index to 20"%(PAM,seq))
                 PAM_index=20
     return PAM_index
 def draw_plot(target_seq,offtargets,total_seq,outfile,title,PAM):
@@ -317,21 +318,15 @@ def main():
                         required=True)
     parser.add_argument("-o", "--outfile", help="FullPath/VIZ", required=True)
     parser.add_argument("-t", "--title", help="Plot title", required=True)
+    parser.add_argument("-tseq", "--target_seq", help="targetseq with PAM", required=True)
     parser.add_argument("--PAM", help="PAM sequence", default="NGG")
     args = parser.parse_args()
 
     print(args)
 
-    visualizeOfftargets(args.identified_file, args.outfile, args.title, args.PAM)
+    visualizeOfftargets(args.identified_file, args.outfile, args.title, args.target_seq, args.PAM)
 
 
 if __name__ == "__main__":
     main()
 
-
-'''
-infile = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_12/identified/py3_781_12878_rep1_identified_matched_annotated.csv"
-outfile = "/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_12/visualization/py3_781_12878_rep1."
-title = 'py3_781_12878_rep1'
-visualizeOfftargets(infile = infile, outfile = outfile, title = title, PAM= 'NGG')
-'''

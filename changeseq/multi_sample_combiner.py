@@ -3,18 +3,36 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import argparse
+import logging
 from matplotlib_venn import venn2
 from visualize import *
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+#############
+## author: Taylor Hudson
+## Innovative Genomics Institute, UC Berkeley
+##
+## script combines change-seq repilcates and normalizes read counts based on
+## user selected method (median-ratio, rpm). Alignment plots and tables are remade on normalized counts
+## along with strip plots, venn diagrams and swarmlots.
+################
+
+
+#global colors
+#colors = {'sample1': '#8FBC8F',
+#          'sample2': '#029386'}  # , 'T': '#D8BFD8', 'C': '#8FBC8F', 'N': '#AFEEEE', 'R': '#3CB371', '-': '#E6E6FA'}
+logger = logging.getLogger('root')
+logger.propagate = False
 
 global colors
-colors = {'sample1': '#8FBC8F',
-          'sample2': '#029386'}  # , 'T': '#D8BFD8', 'C': '#8FBC8F', 'N': '#AFEEEE', 'R': '#3CB371', '-': '#E6E6FA'}
+colors = ['#406061', '#96BA66', '#B45C20','#718CA0',"#5C842F"]
 
 def check_file(file):
     if os.path.isfile(file):
         pass
     else:
-        logger.info("{file} is not your directory")
+        logger.info(f"{file} is not your directory")
 
 def get_read_depth(qcfiles):
     depths = []
@@ -24,7 +42,7 @@ def get_read_depth(qcfiles):
         if 'total_reads:' in line:
             depths.append(int(line.split(':')[-1].strip().replace(",","")))
         else:
-            logger.info('Total read depth for {file} could not be found for tpm normalization')
+            logger.info(f'Total read depth for {file} could not be found for tpm normalization')
             logger.info('Re-run QC or choose another normalization method')
             exit()
     return depths
@@ -37,7 +55,6 @@ def find_mm_and_bulge(df):
         mm=0
         try:
             mm = int(data['Site_Substitution_Number'])
-
         except ValueError:
             for i,j in zip(data['Site_Sequence_Gaps_Allowed'][:-3],data['Aligned_Target_Sequence'][:-3]):
                 if i==j:
@@ -55,15 +72,13 @@ def find_mm_and_bulge(df):
 
 
 def parse_df(df,sample):
-
     ## Filling in Aligned and ungapped sequence
-    df.loc[:,['Aligned_Site_Sequence']]= df['Site_Sequence_Gaps_Allowed'].fillna(df['Site_Sequence'])
-    df.loc[:,'Site_Sequence'] = df['Site_Sequence'].fillna(df['Site_Sequence_Gaps_Allowed'].str.replace("-", ""))
-
-    df.loc[:, ['Aligned_Target_Sequence']] = df['Realigned_Target_Sequence'].replace('none', np.nan)
-    df.loc[:,['Aligned_Target_Sequence']] = df.loc[:,'Aligned_Target_Sequence'].fillna(df['Target_Sequence'])
-    df.loc[:,['RNA_Bulge']] = df['RNA_Bulge'].fillna(0)
-    df.loc[:,['DNA_Bulge']] = df['DNA_Bulge'].fillna(0)
+    df.loc[:,'Aligned_Site_Sequence']= df['Site_Sequence_Gaps_Allowed'].fillna(df['Site_Sequence'])
+    df.loc[:,'Site_Sequence'] = df['Site_Sequence'].fillna(df['Site_Sequence_Gaps_Allowed'].astype('str').str.replace("-", ""))
+    df.loc[:, 'Aligned_Target_Sequence'] = df['Realigned_Target_Sequence'].astype('str').replace('none', np.nan)
+    df.loc[:,'Aligned_Target_Sequence'] = df.loc[:,'Aligned_Target_Sequence'].fillna(df['Target_Sequence'])
+    df.loc[:,'RNA_Bulge'] = df['RNA_Bulge'].fillna(0)
+    df.loc[:,'DNA_Bulge'] = df['DNA_Bulge'].fillna(0)
     df.loc[:,'Genomic Coordinate'] = df['Genomic Coordinate'].str.split('-',expand=True)[0] + df['Strand']
     df = df.loc[:,['Genomic Coordinate','Nuclease_Read_Count', 'Control_Read_Count', 'Site_Sequence',
              'Site_Substitution_Number','Aligned_Site_Sequence',
@@ -117,13 +132,14 @@ def swarm_plot(joined_normalized, name, figout):
         mean.append(x/sum(count>0))
 
 
-    df = joined_normalized
+    df = joined_normalized.copy()
     df.loc[:,'Log2 Mean Reads'] = np.log2(np.array(mean))
     df.loc[:,'Guide Name'] = [name] * len(df['Log2 Mean Reads'])
     df.loc[:,'Shared'] = [f"found in {x} samples" for x in df['Number of Replicates Sites found']]
 
     # Highlight on target if present
-    df.loc[df[['Site_Substitution_Number', 'RNA_Bulge', 'DNA_Bulge']].sum(1)==0, 'Shared'] = 'on target'
+    ontarget_row = df[['Site_Substitution_Number', 'RNA_Bulge', 'DNA_Bulge']].sum(1)==0
+    df.loc[ontarget_row , 'Shared'] = 'on target'
     df = df.sort_values('Shared', ascending=False)
     colors2 = ['#96C04B', '#7ACBC8', '#7c98d3', '#97FFFF']
     palette = colors2[0:len(columns)+1]
@@ -238,7 +254,7 @@ def clean_normalized(joined_normalized,read_threshold):
     joined_normalized.loc[:, read_columns] = joined_normalized.loc[:,read_columns].applymap(
         lambda x: 0 if x and x < read_threshold else x)
     keep_rows = joined_normalized.loc[:, read_columns].sum(1) != 0
-    joined_normalized = joined_normalized.loc[keep_rows, :]
+    joined_normalized = joined_normalized.loc[keep_rows, :].copy()
     joined_normalized.loc[:,'Number of Replicates Sites found'] = (joined_normalized.loc[:, read_columns] > 0).sum(1)
     joined_normalized.loc[:,'Percent Total Reads'] =joined_normalized.loc[:, read_columns].sum(1) / joined_normalized.loc[:, read_columns].sum(1).sum()
     joined_normalized.loc[:, 'Percent Total Reads'] =  joined_normalized['Percent Total Reads'].round(5) *100
@@ -250,7 +266,7 @@ def clean_normalized(joined_normalized,read_threshold):
                                                       'Number of Replicates Sites found', 'Percent Total Reads',
                                                       'Aligned_Target_Sequence', 'Gene_Name', 'Feature', 'Cell']
 
-    joined_simplified_report =  joined_normalized.loc[:, keep_cols ]
+    joined_simplified_report =  joined_normalized.loc[:, keep_cols ].copy()
     return joined_normalized, joined_simplified_report
 
 
@@ -274,14 +290,14 @@ def make_offtarget_dict(joined_normalized,subset):
     sample_df = joined_normalized.loc[joined_normalized[subset]>0].reset_index().copy()
     offtargets = []
     total_seq = sample_df.shape[0]
+    target_seq = ""
+
     for i,row in sample_df.iterrows():
         offtarget_reads = row[subset]
         annot = ""
         target_seq = row['Target_Sequence'].replace("-", "")
         if int(row['RNA_Bulge']) + int(row['DNA_Bulge']) == 0:
-
             no_bulge_offtarget_sequence = row['Site_Sequence']
-
             bulge_offtarget_sequence = ""
             realigned_target_seq = row['Aligned_Target_Sequence']
 
@@ -289,8 +305,6 @@ def make_offtarget_dict(joined_normalized,subset):
             no_bulge_offtarget_sequence = ""
             realigned_target_seq =  row['Aligned_Target_Sequence']
             bulge_offtarget_sequence = row['Aligned_Site_Sequence']
-
-
 
         coord = row['Genomic Coordinate']
 
@@ -318,14 +332,10 @@ def make_offtarget_dict(joined_normalized,subset):
     return offtargets, target_seq, total_seq
 
 def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normalization_method,read_threshold,PAM):
-    # rep_group_name = 'SNP1'
-    # replicates = {'sample_name': ['SNP1_rep1', 'SNP1_rep2'], 'target': ['CCCGCTCCAGGCGTCGGCGGNGG', 'CCCGCTCCAGGCGTCGGCGGNGG']}
-    # infiles = ['/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_13/raw_output/SNP1_rep1_identified_matched_annotated.csv', '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_13/raw_output/SNP1_rep2_identified_matched_annotated.csv']
-    # qcfiles = ['/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_13/qc/SNP2_rep1_qc_report.txt', '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_13/qc/SNP2_rep2_qc_report.txt']
-    # processed_outfile = '/groups/clinical/projects/Assay_Dev/CHANGEseq/CS_13/processed_output/SNP2_joined.csv'
-    # normalization_method = 'median'
-    # read_threshold,PAM = 6,'NGG'
-
+    '''
+    joined and normalizes replicates as indicated in manifest
+    '''
+    logger.info(f'Joining and normalizing {rep_group_name} replicates')
     processed_outfile =outfolder + "/tables/"+ rep_group_name +'_joined.csv'
     simplified_report_outfile = processed_outfile.replace('.csv','_simplified.csv')
     swarm_plot_out = outfolder + "/visualization/"+ rep_group_name + "_postprocess_swarmplot.png"

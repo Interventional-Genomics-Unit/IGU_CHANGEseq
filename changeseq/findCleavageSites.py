@@ -532,7 +532,7 @@ def realignedSequences(targetsite_sequence, chosen_alignment, errors):
                 
                 ## update indel dict, I found the deletion positions are relative if insertion occurs first
                 update_indels=[]
-                for k in indels.keys():
+                for k in list(indels):
                     if k > m_index:
                         if not indels[k]:
                             del indels[k]
@@ -571,7 +571,7 @@ def alignSequences(targetsite_sequence, window_sequence, max_score=7):
     alignments_bulge.append(('+', 'gapped', regex.search(query_regex_gap, window_sequence, regex.BESTMATCH)))
     alignments_bulge.append(('-', 'gapped', regex.search(query_regex_gap, reverseComplement(window_sequence), regex.BESTMATCH)))
 
-    lowest_distance_score, lowest_mismatch = 100, max_score + 1
+    lowest_distance_score, lowest_mismatch = 100, max_score + 2
     chosen_alignment_b, chosen_alignment_m, chosen_alignment_strand_b, chosen_alignment_strand_m = None, None, '', ''
 
     # Use regex to find the best match allowing only for mismatches

@@ -14,7 +14,8 @@ IGU Added Features:
 * identified site bam file for use with IGV
 * genomic annotation to sites
 * more plotting options - venn diagram, swarmplot and more
-* Fixed variable analysis bug
+* Fixed variant analysis bug
+* coming soon: dual BE and Cas pipline 
 
 
  ## Installation
@@ -108,7 +109,27 @@ The manifest file has the following .csv file
 - `sample_name`: runs the specific sample indicated
 
 
-## Pipeline Output
+## Pipeline Results
 When running the full pipeline, the results of each step are outputted to the `output_folder` in a separate folder for each step. The output folders and their respective contents are as follows:
 
-TBC
+```
+project_directory/
+│
+├── raw_fqs/                        # User created input folder of FASTQs
+│
+├──aligned/                         # aligned reads
+│
+├──preprocessed/                    # Cutadapt & fastp output for FASTQ trimming 
+│
+├── raw_output/                     # Pre-normalized raw read counts
+│   └── visualization/              # Alignment plots of raw read counts
+│
+├── qc/
+│   ├── alignment_files/            # BAM stats and a subset of identified sites (great for IGV!)
+│   └── QC_reports/                 # Reports: % trimmed, % aligned, read counts, etc.
+│
+└── processed_output/               # Processed + normalized reads
+    ├── joined_tables/              # Detailed replicate-level summary tables
+    └── visualizations/             # Swarm plots, scatter plots, alignment plots, etc.
+
+```
