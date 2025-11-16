@@ -275,8 +275,6 @@ class CircleSeq:
                 infiles.append(os.path.join(self.parameters["analysis_folder"], 'raw_results/tables',
                                             sample + '_identified_matched_annotated.csv'))
                 qcfiles.append(os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_qc_report.txt'))
-            logger.info('Normalizing {rep_group_name}')
-
             outfolder = os.path.join(self.parameters["analysis_folder"],'post-process_results/')
             process_results(rep_group_name, replicates, infiles, qcfiles,
                             outfolder=outfolder,

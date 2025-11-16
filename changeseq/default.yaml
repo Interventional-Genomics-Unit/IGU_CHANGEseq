@@ -5,20 +5,20 @@ cutadapt: cutadapt
 njobs: 6
 AG_read: 1
 samtools: samtools
-window_size: 3
+window_size: 30
 bwa: bwa
 dedup_umi: FALSE
 analysis_folder: data/StandardOutput/
 search_radius: 30
 normalize: median
 read_threshold: 6
-gap_threshold: 5
+gap_threshold: 3
 merged_analysis: FALSE
 mismatch_threshold: 6
 variant_analysis: FALSE
 bc_pattern: None
 start_threshold: 1
-mapq_threshold: 50
+mapq_threshold: 40
 PAM: NGG
 samples:
   TEST:

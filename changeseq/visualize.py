@@ -7,7 +7,6 @@ from Bio import SeqUtils
 
 
 ### 2017-October-11: Adapt plots to new output; inputs are managed using "argparse".
-
 logger = logging.getLogger('root')
 logger.propagate = False
 

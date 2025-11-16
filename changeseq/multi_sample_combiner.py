@@ -172,7 +172,6 @@ def create_pseudo_sample(data_with_pseudocount):
     )
     return geometric_means
 
-
 def median_normalization(count_dict):
     epsilon = 1
     # https://divingintogeneticsandgenomics.com/post/details-in-centered-log-ratio-clr-normalization-for-cite-seq-protein-count-data/
@@ -290,12 +289,11 @@ def make_offtarget_dict(joined_normalized,subset):
     sample_df = joined_normalized.loc[joined_normalized[subset]>0].reset_index().copy()
     offtargets = []
     total_seq = sample_df.shape[0]
-    target_seq = ""
+    target_seq = joined_normalized['Target_Sequence'].iloc[0].replace("-", "")
 
     for i,row in sample_df.iterrows():
         offtarget_reads = row[subset]
         annot = ""
-        target_seq = row['Target_Sequence'].replace("-", "")
         if int(row['RNA_Bulge']) + int(row['DNA_Bulge']) == 0:
             no_bulge_offtarget_sequence = row['Site_Sequence']
             bulge_offtarget_sequence = ""

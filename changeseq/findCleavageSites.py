@@ -28,20 +28,21 @@ def is_outie(x,y):
 				return True,y.reference_end - x.reference_start
 	return False,0
 
+
+
 def tabulate_merged_start_positions(BamFileName, cells, name, targetsite, mapq_threshold, gap_threshold, start_threshold, outfile_base, pattern,read_length=151):
     output_filename = '{0}_coordinates.txt'.format(outfile_base)
 
     sorted_bam_file = HTSeq.BAM_Reader(BamFileName)
-    HTSeq.BAM_Reader()
     filename_base = os.path.basename(BamFileName)
 
     ### TH use bam writer to subset the bam file with reads that matches the criteria mapq
     #bam_writer = HTSeq.BAM_Writer.from_BAM_Reader(filtered_bam_filename,sorted_bam_file)
 
-    ga = HTSeq.GenomicArray("auto", stranded=False)
-    ga_windows = HTSeq.GenomicArray("auto", stranded=False)
-    #ga_stranded = HTSeq.GenomicArray("auto", stranded=True)
-    ga_coverage = HTSeq.GenomicArray("auto", stranded=False)
+    ga = HTSeq.GenomicArray("auto", stranded=False,typecode="d")
+    ga_windows = HTSeq.GenomicArray("auto", stranded=False,typecode="d")
+    ga_stranded = HTSeq.GenomicArray("auto", stranded=False,typecode="d")
+    ga_coverage = HTSeq.GenomicArray("auto", stranded=False,typecode="d")
 
     read_count = 0
 
@@ -111,6 +112,8 @@ def tabulate_merged_start_positions(BamFileName, cells, name, targetsite, mapq_t
     Only consider alignments with matching positions from the beginning of the read.
     For read pairs with multiple alignments, pick the one with matching positions at the beginning.
 """
+
+
 def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshold, gap_threshold, outfile_base, pattern,all_chromosomes):
 
     output_filename = '{0}_coordinates.txt'.format(outfile_base)
@@ -122,10 +125,10 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
     #ga_stranded = HTSeq.GenomicArray("auto", stranded=True)
     #ga_coverage = HTSeq.GenomicArray("auto", stranded=False)
 
-    ga = HTSeq.GenomicArray("auto", stranded=False,typecode="i")
-    ga_windows = HTSeq.GenomicArray("auto", stranded=False,typecode="i")
-    ga_stranded = HTSeq.GenomicArray("auto", stranded=True)
-    ga_coverage = HTSeq.GenomicArray("auto", stranded=False,typecode="i")
+    ga = HTSeq.GenomicArray("auto", stranded=False,typecode="d")
+    ga_windows = HTSeq.GenomicArray("auto", stranded=False,typecode="d")
+    ga_stranded = HTSeq.GenomicArray("auto", stranded=True,typecode="d")
+    ga_coverage = HTSeq.GenomicArray("auto", stranded=False,typecode="d")
     read_count = 0
 
     with open(output_filename, 'w') as o:
@@ -135,28 +138,28 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
 
         for bundle in HTSeq.pair_SAM_alignments(sorted_bam_file, bundle=True):
             output = False
+
             first_read_chr, first_read_position, first_read_strand = None, None, None
             second_read_chr, second_read_position, second_read_strand = None, None, None
-            if len(bundle) == 1:  # single alignment
+            if len(bundle) ==0:
+                pass
+            elif len(bundle) == 1 and len(bundle[0])>1:
                 first_read, second_read = bundle[0]
-                if first_read != None and second_read != None:
+                if first_read.aligned and second_read.aligned:
+                    if first_read.aQual >= mapq_threshold and not first_read.flag & 1024 and \
+                            ((first_read.iv.strand == '+' and first_read.cigar[0].type == 'M') or (first_read.iv.strand == '-' and first_read.cigar[-1].type == 'M')):
+                        first_read_chr = first_read.iv.chrom
+                        first_read_position = first_read.iv.start_d
+                        first_read_strand = first_read.iv.strand
 
-                    if first_read.aligned:
-                        if first_read.aQual >= mapq_threshold and not first_read.flag & 1024 and \
-                                ((first_read.iv.strand == '+' and first_read.cigar[0].type == 'M') or (first_read.iv.strand == '-' and first_read.cigar[-1].type == 'M')):
-                            first_read_chr = first_read.iv.chrom
-                            first_read_position = first_read.iv.start_d
-                            first_read_strand = first_read.iv.strand
-
-                    if second_read.aligned:
-                        if second_read.aQual >= mapq_threshold and not first_read.flag & 1024 and \
-                                ((second_read.iv.strand == '+' and second_read.cigar[0].type == 'M') or (second_read.iv.strand == '-' and second_read.cigar[-1].type == 'M')):
-                            second_read_chr = second_read.iv.chrom
-                            second_read_position = second_read.iv.start_d
-                            second_read_strand = second_read.iv.strand
-                else:
-                    print('paired read not found')
-                    print(bundle)
+                    if second_read.aQual >= mapq_threshold and not first_read.flag & 1024 and \
+                            ((second_read.iv.strand == '+' and second_read.cigar[0].type == 'M') or (second_read.iv.strand == '-' and second_read.cigar[-1].type == 'M')):
+                        second_read_chr = second_read.iv.chrom
+                        second_read_position = second_read.iv.start_d
+                        second_read_strand = second_read.iv.strand
+                #else:
+                #    print('paired read not found')
+                #    print(bundle)
             elif len(bundle) > 1:  # multiple alignments
                 first_read_list, second_read_list = zip(*bundle)
                 filtered_first_read_list = []
@@ -190,22 +193,27 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
 
             # We check whether or not the read was aligned by asking for 'first_read_chr'
             if first_read_chr:
-                if (first_read_chr == second_read_chr) and (pattern.match(str(first_read_chr)) or all_chromosomes) and \
+                if (first_read_chr == second_read_chr) and (pattern.match(str(first_read_chr))) and \
                         ((first_read.iv.strand == '+' and second_read.iv.strand == '-' and abs(first_read_position - second_read_position) <= gap_threshold) or
                              (second_read.iv.strand == '+' and first_read.iv.strand == '-' and abs(second_read_position - first_read_position) <= gap_threshold)):
-
                     # if first_read_chr in ref_chr and first_read_position and first_read_strand:
-                    first_read_strand = "."
-                    ga[HTSeq.GenomicPosition(first_read_chr, first_read_position, first_read_strand)] += 1
-                    ga_windows[HTSeq.GenomicPosition(first_read_chr, first_read_position, first_read_strand)] = 1
-                    # ga_stranded[HTSeq.GenomicPosition(first_read_chr, first_read_position, first_read_strand)] += 1
+                    #first_read_strand = "."
+                    try:
+                        ga[HTSeq.GenomicPosition(first_read_chr, first_read_position,".")] += 1
+                        ga_windows[HTSeq.GenomicPosition(first_read_chr, first_read_position,".")] = 1
+                        #ga_stranded[HTSeq.GenomicPosition(first_read_chr, first_read_position,first_read_strand)] += 1
 
 
-                    second_read_strand = '.'
-                    # if second_read_chr in ref_chr and second_read_position and second_read_strand:
-                    ga[HTSeq.GenomicPosition(second_read_chr, second_read_position, second_read_strand)] += 1
-                    ga_windows[HTSeq.GenomicPosition(second_read_chr, second_read_position, second_read_strand)] = 1
-                    # ga_stranded[HTSeq.GenomicInterval(second_read_chr, second_read_position, second_read_strand)] += 1
+                        #second_read_strand = '.'
+                        # if second_read_chr in ref_chr and second_read_position and second_read_strand:
+                        ga[HTSeq.GenomicPosition(second_read_chr, second_read_position,".")] += 1
+                        ga_windows[HTSeq.GenomicPosition(second_read_chr, second_read_position,".")] = 1
+                        #ga_stranded[HTSeq.GenomicPosition(second_read_chr, second_read_position,second_read_strand)] += 1
+                    except:
+                        logger.info(f'{first_read}, {first_read_position}')
+                        logger.info(f'{second_read},{second_read_position}')
+                        exit()
+
                     output = True
 
             # Output read positions for plotting. Add gap.
@@ -217,9 +225,9 @@ def tabulate_start_positions(BamFileName, cells, name, targetsite, mapq_threshol
 
             read_count += 1
             if not read_count % 100000:
-                print(read_count/float(1000000), end=" ", file=sys.stderr)
+                logger.info(str(read_count/float(1000000)))
 
-    return ga, ga_windows, ga_coverage, read_count
+    return ga, ga_windows, ga_stranded, ga_coverage, read_count
 
 """ Find genomic windows (coordinate positions)
 """
@@ -571,7 +579,7 @@ def alignSequences(targetsite_sequence, window_sequence, max_score=7):
     alignments_bulge.append(('+', 'gapped', regex.search(query_regex_gap, window_sequence, regex.BESTMATCH)))
     alignments_bulge.append(('-', 'gapped', regex.search(query_regex_gap, reverseComplement(window_sequence), regex.BESTMATCH)))
 
-    lowest_distance_score, lowest_mismatch = 100, max_score + 2
+    lowest_distance_score, lowest_mismatch = 100, max_score + 1
     chosen_alignment_b, chosen_alignment_m, chosen_alignment_strand_b, chosen_alignment_strand_m = None, None, '', ''
 
     # Use regex to find the best match allowing only for mismatches
@@ -657,7 +665,7 @@ def compare(ref, bam, control, targetsite, search_radius, windowsize, mapq_thres
         
     output_filename = out + '_count.txt'
     with open(output_filename, 'w') as o:
-        print("Writing counts to {0}".format(output_filename), file=sys.stderr)
+        logger.info("Writing counts to {0}".format(output_filename))
         if merged:
             print("Tabulate nuclease merged start positions.", file=sys.stderr)
             nuclease_ga, nuclease_ga_windows,  nuclease_ga_coverage, total_nuclease_count = \
@@ -669,13 +677,13 @@ def compare(ref, bam, control, targetsite, search_radius, windowsize, mapq_thres
                 tabulate_merged_start_positions(control, cells, name, targetsite, mapq_threshold, gap_threshold,
                                                 start_threshold, out + '_CONTROL', pattern,read_length)
         else:
-            print("Tabulate nuclease standard start positions.", file=sys.stderr)
-            outfile_base = out + '_NUCLEASE'
-            nuclease_ga, nuclease_ga_windows, nuclease_ga_coverage, total_nuclease_count = \
-                tabulate_start_positions(bam, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_NUCLEASE', pattern,  all_chromosomes)
-            print("Tabulate control standard start positions.", file=sys.stderr)
-            control_ga, control_ga_windows,control_ga_coverage, total_control_count = \
-                tabulate_start_positions(control, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_CONTROL', pattern,  all_chromosomes)
+            logger.info("Tabulate nuclease standard start positions.")
+            #outfile_base = out + '_NUCLEASE'
+            nuclease_ga, nuclease_ga_windows, nuclease_ga_stranded, nuclease_ga_coverage, total_nuclease_count = \
+                tabulate_start_positions(bam, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_NUCLEASE', pattern, all_chromosomes)
+            logger.info("Tabulate control standard start positions.")
+            control_ga, control_ga_windows, control_ga_stranded, control_ga_coverage, total_control_count = \
+                tabulate_start_positions(control, cells, name, targetsite, mapq_threshold, gap_threshold, out + '_CONTROL', pattern, all_chromosomes)
 
         # For all positions with detected read mapping positions, put into a combined genomicArray
         for iv, value in nuclease_ga.steps():
