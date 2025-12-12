@@ -1,6 +1,6 @@
-annotate_path: /home/thudson/projects/IGU_CHANGEseq/changeseq/data/ncbiRefSeq.bed.gz
-reference_genome:  /groups/clinical/projects/clinical_shared_data/hg38/hg38.fa
-changeseq_adapter: CTGTCTCTTATACACATCT
+annotate_path: /path/to/IGU_CHANGEseq/changeseq/data/ncbiRefSeq.bed.gz
+reference_genome:  /path/to/hg38.fa
+changeseq_adapter: CTGTCTCTTATACACATCTACGTAGATGTGTATAAGAGACAG
 cutadapt: cutadapt
 njobs: 6
 AG_read: 1
@@ -9,17 +9,31 @@ window_size: 30
 bwa: bwa
 dedup_umi: FALSE
 analysis_folder: data/StandardOutput/
-search_radius: 30
 normalize: median
+read_length: 151
 read_threshold: 6
-gap_threshold: 3
 merged_analysis: FALSE
 mismatch_threshold: 6
+bulge_threshold: 1
+edist_threshold: 7
 variant_analysis: FALSE
 bc_pattern: None
 start_threshold: 1
 mapq_threshold: 40
 PAM: NGG
+
+#Cas9 params:
+gap_threshold: 3
+search_radius: 30
+
+# BE params
+# ideal
+# BEsearch_radius: 10
+# BEmodel_min_overlap: 2
+# BEmodel_max_overlap: 15
+BEsearch_radius: 10
+BEmodel_min_overlap: 2
+BEmodel_max_overlap: 15
 samples:
   TEST:
     target: GAGTCCGAGCAGAAGAAGAANGG

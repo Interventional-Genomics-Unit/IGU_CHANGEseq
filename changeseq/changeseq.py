@@ -17,6 +17,7 @@ import log
 from utility import get_parameters, make_folders, copy_control_samples,check_control_exists
 from copy import deepcopy as dp
 import findCleavageSites
+import findCleavageSites_BE
 import callVariants
 from annotate import annotate
 from report_qc import write_qc
@@ -35,7 +36,10 @@ class CircleSeq:
         self.vis_input_tsv = {}
         self.annotation_file = {}
 
-    def parseManifest(self,analysis_folder,fq_dir,manifest,settings, sample='all'):
+    def parseManifest(self,analysis_folder,fq_dir,manifest,settings, be='F',sample='all'):
+        log_file =  analysis_folder+ "/changeseq_pipeline.log"
+        log.addFileHandlerToLogger(logger,log_file)
+        logger.info(f"Logging to {log_file}")
         logger.info('Loading manifest...')
 
         try:
@@ -46,6 +50,9 @@ class CircleSeq:
                 self.parameters['samples'] = {}
                 self.parameters['samples'][sample] = parameters['samples'][sample]
 
+            # base editing analysis flag
+            self.be_flag = False if be == 'F' else True
+
             # set control
             self.representative_controls = copy_control_samples(self.parameters['samples'])
 
@@ -54,8 +61,8 @@ class CircleSeq:
 
             # Just to initialize some default input file names for the identify and visualization steps
             for sample in self.parameters['samples']:
-                self.findCleavageSites_input_bam[sample] = [f"{self.output_dir['aligned']}/{sample}_name_sorted.bam",
-                                                            f"{self.output_dir['aligned']}/control_{sample}_name_sorted.bam"]
+                self.findCleavageSites_input_bam[sample] = [f"{self.output_dir['aligned']}/{sample}_sorted.bam",
+                                                            f"{self.output_dir['aligned']}/control_{sample}_sorted.bam"]
 
             # initialize some default input file names for annotation files
             for sample in self.parameters['samples']:
@@ -166,9 +173,10 @@ class CircleSeq:
                                self.parameters['reference_genome'],
                                sample_merge_path,
                                '',
-                               sample_alignment_path)
+                               sample_alignment_path,
+                               self.be_flag)
 
-                    for ext in ["_name_sorted.bam", "_name_sorted.bam.bai"]:
+                    for ext in ["_sorted.bam", "_sorted.bam.bai"]:
                         run_control_flag = check_control_exists(sample=sample,
                                                                 representative_control=self.representative_controls[
                                                                     sample],
@@ -180,7 +188,8 @@ class CircleSeq:
                                        self.parameters['reference_genome'],
                                        control_sample_merge_path,
                                        '',
-                                       control_sample_alignment_path)
+                                       control_sample_alignment_path,
+                                       self.be_flag)
                             break
 
                     self.merged[sample] = sample_alignment_path
@@ -197,28 +206,28 @@ class CircleSeq:
                 for sample in self.parameters['samples']:
                     sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '.sam')
                     control_sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', 'control_' + sample + '.sam')
-                    alignReads(self.parameters['bwa'],
+                    alignReads(sample,self.parameters['bwa'],
                                self.parameters['reference_genome'],
                                self.parameters['samples'][sample]["read1"],
                                self.parameters['samples'][sample]["read2"],
-                               sample_alignment_path)
+                               sample_alignment_path,self.be_flag)
 
-                    for ext in ["_name_sorted.bam","_name_sorted.bam.bai"]:
+                    for ext in ["_sorted.bam","_sorted.bam.bai"]:
                         run_control_flag = check_control_exists(sample=sample,
                                                                 representative_control=self.representative_controls[sample],
                                                                 control_outfile=control_sample_alignment_path.replace(".sam",ext))
                         if run_control_flag:
-                            alignReads(self.parameters['bwa'],
+                            alignReads('control_' + sample,self.parameters['bwa'],
                                        self.parameters['reference_genome'],
                                        self.parameters['samples'][sample]['controlread1'],
                                        self.parameters['samples'][sample]['controlread2'],
-                                       control_sample_alignment_path)
+                                       control_sample_alignment_path,self.be_flag)
                             break
                     self.aligned[sample] = sample_alignment_path
-                    self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_name_sorted.bam')
+                    self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_sorted.bam')
                     logger.info('Finished aligning reads to genome.')
-                    self.findCleavageSites_input_bam[sample] = [sample_alignment_path.replace(".sam","_name_sorted.bam"),
-                                                                control_sample_alignment_path.replace(".sam","_name_sorted.bam")]
+                    self.findCleavageSites_input_bam[sample] = [sample_alignment_path.replace(".sam","_sorted.bam"),
+                                                                control_sample_alignment_path.replace(".sam","_sorted.bam")]
 
             except Exception as e:
                 logger.error('Error aligning')
@@ -226,25 +235,49 @@ class CircleSeq:
                 quit()
 
     def findCleavageSites(self):
-        logger.info('Identifying off-target cleavage sites.')
 
-        try:
-            for sample in self.parameters['samples']:
-                bam, control_bam = self.findCleavageSites_input_bam[sample]
+        if self.be_flag:
+            logger.info('Identifying off-target cleavage sites for Base Editing.')
+            try:
+                for sample in self.parameters['samples']:
+                    bam, control_bam = self.findCleavageSites_input_bam[sample]
 
-                identified_sites_file = os.path.join(self.parameters["analysis_folder"],  'raw_results/tables', sample)
+                    findCleavageSites_BE.compare(bam=bam,control=control_bam,label=sample,
+                                                 output_dir=self.parameters["analysis_folder"] + 'raw_results/tables',
+                                                 targetsite=self.parameters['samples'][sample]['target'],
+                                                 **self.parameters)
 
-                findCleavageSites.compare(self.parameters['reference_genome'], bam, control_bam, self.parameters['samples'][sample]['target'],
-                                          self.parameters['search_radius'], self.parameters['window_size'], self.parameters['mapq_threshold'], self.parameters['gap_threshold'],
-                                          self.parameters['start_threshold'], self.parameters['mismatch_threshold'],
-                                          sample, self.parameters['samples'][sample]['description'],
-                                          identified_sites_file, False,
-                                          merged=self.parameters['merged_analysis'],read_count_cutoff=self.parameters['read_threshold'],read_length=151)
 
-        except Exception as e:
-            logger.error('Error identifying off-target cleavage site.')
-            logger.error(traceback.format_exc())
-            quit()
+            except Exception as e:
+                logger.error('Error identifying off-target cleavage site.')
+                logger.error(traceback.format_exc())
+                quit()
+        else:
+
+            try:
+                for sample in self.parameters['samples']:
+                    bam, control_bam = self.findCleavageSites_input_bam[sample]
+
+                    identified_sites_file = os.path.join(self.parameters["analysis_folder"],  'raw_results/tables', sample)
+
+                    findCleavageSites.compare(self.parameters['reference_genome'], bam, control_bam,
+                                              self.parameters['samples'][sample]['target'],
+                                              self.parameters['search_radius'],
+                                              self.parameters['window_size'],
+                                              self.parameters['mapq_threshold'],
+                                              self.parameters['gap_threshold'],
+                                              self.parameters['start_threshold'],
+                                              self.parameters['mismatch_threshold'],
+                                              sample, self.parameters['samples'][sample]['description'],
+                                              identified_sites_file, False,
+                                              merged=self.parameters['merged_analysis'],
+                                              read_count_cutoff=self.parameters['read_threshold'],
+                                              read_length=self.parameters['read_length'])
+
+            except Exception as e:
+                logger.error('Error identifying off-target cleavage site.')
+                logger.error(traceback.format_exc())
+                quit()
 
     def addAnnotations(self):
         for sample in self.parameters['samples']:
@@ -284,11 +317,14 @@ class CircleSeq:
 
     def QC(self):
         logger.info('Starting QC')
+        if self.parameters['merged_analysis']:
+            pass
         try:
             for sample in self.parameters['samples']:
+                pass
 
                 logger.info('Running fastq quality and adapter analysis for {0}'.format(sample))
-                fastqc_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '.html')
+                fastqc_logfile = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '.html')
 
                 fastqQC(self.parameters['samples'][sample]['read1'],
                         self.parameters['samples'][sample]['read2'],
@@ -371,6 +407,47 @@ class CircleSeq:
     def referenceFree(self):
         pass
 
+    def extract_outward_reads(self):
+        logger.info('extracting outward reads...')
+        for sample in self.parameters['samples']:
+            bam, control_bam = self.findCleavageSites_input_bam[sample]
+            sorted_bam_file_outward_tsv = os.path.join(self.parameters["analysis_folder"], 'aligned',
+                                                 sample + '.outward_reads.tsv')
+            out_pdf =sorted_bam_file_outward_tsv.replace('.outward_reads.tsv','.outward_reads.pdf')
+            control_sorted_bam_file_outward_tsv =os.path.join(self.parameters["analysis_folder"], 'aligned',
+                                                 'control_' + sample + '.outward_reads.tsv')
+
+            command = "module load python/2.7.13; /hpcf/apps/python/install/2.7.13/bin/python /home/yli11/HemTools/bin/bam_outward_bed.py -b {0} -o {1}; cut -f 5 {1} > {1}.list".format(bam,sorted_bam_file_outward_tsv)
+            subprocess.call(command,shell=True)
+            command = "module load python/2.7.13; /hpcf/apps/python/install/2.7.13/bin/python /home/yli11/HemTools/bin/bam_outward_bed.py -b {0} -o {1}; cut -f 5 {1} > {1}.list".format(control_bam,control_sorted_bam_file_outward_tsv)
+            subprocess.call(command,shell=True)
+
+
+            # plot
+            command = "module load conda3;source activate /home/yli11/.conda/envs/py2;countplot_seaborn.py --treatment {0}.list --control {1}.list -o {2} --title {3} --min -10 --max 30 --yscale_log".format(sorted_bam_file_outward_tsv,control_sorted_bam_file_outward_tsv,out_pdf,sample)
+            subprocess.call(command,shell=True)
+
+        logger.info('Finished ploting outward reads overlaps')
+    # def extract_deamination_position(self):
+    #     logger.info('extracting deamination positions...')
+    #
+    #     for sample in self.samples: ## 3/10/2021
+    #         sorted_bam_file = os.path.join(self.analysis_folder, 'aligned', sample + '.bam')
+    #         control_sorted_bam_file = os.path.join(self.analysis_folder, 'aligned', 'control_' + sample + '.bam')
+    #         sorted_bam_file_outward_tsv = os.path.join(self.analysis_folder, 'aligned', sample + '.outward_reads.deamination.tsv')
+    #         out_pdf = os.path.join(self.analysis_folder, 'aligned', sample + '.outward_reads.deamination.pdf')
+    #         control_sorted_bam_file_outward_tsv = os.path.join(self.analysis_folder, 'aligned', 'control_' + sample + '.outward_reads.deamination.tsv')
+    #
+    #         command = "module load conda3;source activate /home/yli11/.conda/envs/py2;/home/yli11/.conda/envs/py2/bin/python /home/yli11/HemTools/bin/bam_deamination.py -b {0} -o {1}; cut -f 5 {1} > {1}.list".format(sorted_bam_file,sorted_bam_file_outward_tsv)
+    #         subprocess.call(command,shell=True)
+    #         command = "module load conda3;source activate /home/yli11/.conda/envs/py2;/home/yli11/.conda/envs/py2/bin/python /home/yli11/HemTools/bin/bam_deamination.py -b {0} -o {1}; cut -f 5 {1} > {1}.list".format(control_sorted_bam_file,control_sorted_bam_file_outward_tsv)
+    #         subprocess.call(command,shell=True)
+    #         # plot
+    #         command = "module load conda3;source activate /home/yli11/.conda/envs/py2;countplot_seaborn.py --treatment {0}.list --control {1}.list -o {2} --title {3} --min 1 --max 30 --yscale_log".format(sorted_bam_file_outward_tsv,control_sorted_bam_file_outward_tsv,out_pdf,sample)
+    #         subprocess.call(command,shell=True)
+    #     logger.info('Finished ploting outward reads overlaps')
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
@@ -383,6 +460,7 @@ def parse_args():
     all_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     all_parser.add_argument('--analysis_folder', '-dir', help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     all_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    all_parser.add_argument('--base_editing', '-be', help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false', default = 'F')
     all_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     parallel_parser = subparsers.add_parser('parallel', help='Run all steps of the pipeline in parallel')
@@ -390,6 +468,9 @@ def parse_args():
     parallel_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     parallel_parser.add_argument('--analysis_folder', '-dir', help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     parallel_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    parallel_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     parallel_parser.add_argument('--lsf', '-l', help='Specify LSF CMD', default='bsub -R rusage[mem=32000] -P Genomics -q standard')
     parallel_parser.add_argument('--run', '-r', help='Specify which steps of pipepline to run (all, align, identify, visualize, variants)', default='all')
 
@@ -398,6 +479,9 @@ def parse_args():
     align_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     align_parser.add_argument('--analysis_folder', '-dir', help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     align_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    align_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     align_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     data_parser = subparsers.add_parser('makefiles', help='Combine and normalize replicates, produces vizualations')
@@ -414,6 +498,9 @@ def parse_args():
     merge_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     merge_parser.add_argument('--analysis_dir', '-dir', help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     merge_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    merge_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     merge_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
 
@@ -422,6 +509,9 @@ def parse_args():
     identify_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     identify_parser.add_argument('--analysis_folder', '-dir', help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     identify_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    identify_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     identify_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     visualize_parser = subparsers.add_parser('visualize', help='Run visualization only')
@@ -429,6 +519,9 @@ def parse_args():
     visualize_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     visualize_parser.add_argument('--analysis_folder', '-dir', help='Directory in which all pipeline outputs will be saved (abs path)', required=True)
     visualize_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    visualize_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     visualize_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     variants_parser = subparsers.add_parser('variants', help='Run variants analysis only')
@@ -436,6 +529,9 @@ def parse_args():
     variants_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     variants_parser.add_argument('--analysis_folder', '-dir', help='Directory in which all pipeline outputs will be saved (abs path)', required=True)
     variants_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    variants_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     variants_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     analyzer_parser = subparsers.add_parser('analyze', help='Run analysis  only')
@@ -444,6 +540,9 @@ def parse_args():
     analyzer_parser.add_argument('--analysis_folder', '-dir',
                             help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     analyzer_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)',default='default')
+    analyzer_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     analyzer_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     coverage_parser = subparsers.add_parser('qc', help='Run QC analysis of matched sites')
@@ -451,6 +550,9 @@ def parse_args():
     coverage_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     coverage_parser.add_argument('--analysis_folder', '-dir', help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     coverage_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    coverage_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     coverage_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     reference_free_parser = subparsers.add_parser('reference-free', help='Run reference-free discovery only')
@@ -458,6 +560,9 @@ def parse_args():
     reference_free_parser.add_argument('--raw_fastq_folder', '-fq', help='Directory where raw fastq file are stored (abs path)', required=True)
     reference_free_parser.add_argument('--analysis_dir', '-dir', help='Directory in which all pipeline outputs will be saved (aabs path)', required=True)
     reference_free_parser.add_argument('--settings', '-stg', help='The file name of the parameters and settings are (.csv)', default = 'default')
+    reference_free_parser.add_argument('--base_editing', '-be',
+                            help='Whether to run the CHANGE-seq-BE analysis for base editors. "T" for true "F" false',
+                            default='F')
     reference_free_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     return parser.parse_args()
@@ -467,7 +572,7 @@ def main():
 
     if args.command == 'all':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.processReads()
         c.alignReads()
         c.findCleavageSites()
@@ -478,15 +583,15 @@ def main():
         c.callVariants()
     elif args.command == 'parallel':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.parallel(args.manifest, args.lsf, args.run)
     elif args.command == 'merge':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.alignReads()
     elif args.command == 'align':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.alignReads()
         c.findCleavageSites()
         c.addAnnotations()
@@ -495,28 +600,28 @@ def main():
         c.QC()
     elif args.command == 'identify':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.findCleavageSites()
         c.addAnnotations()
         c.visualize()
     elif args.command == 'visualize':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.addAnnotations()
         c.visualize()
         c.analyze()
         c.QC()
     elif args.command == 'analyze':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.analyze()
     elif args.command == 'variants':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.callVariants()
     elif args.command == 'qc':
         c = CircleSeq()
-        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.sample)
+        c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.QC()
     elif args.command == 'makefiles':
         from make_annotation_table import makefiles

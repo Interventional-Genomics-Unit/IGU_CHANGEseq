@@ -36,7 +36,6 @@ def parseSitesFile(infile):
     offtargets = []
     total_seq = 0
     with open(infile, 'r') as f:
-        f.readline()
         for line in f:
             line = line.rstrip('\n')
             if '\t' in line:
@@ -44,43 +43,46 @@ def parseSitesFile(infile):
             else:
                 line_items = line.split(',')
 
-            offtarget_reads = line_items[4]
-            no_bulge_offtarget_sequence = line_items[7].upper()  # Site_Sequence
-            bulge_offtarget_sequence = line_items[9]
-            target_seq = line_items[16]
-            realigned_target_seq = line_items[17]
-            coord = line_items[3].split("-")[0]
-            num_mismatch = int(line_items[8])
-
-            if "intergenic" not in line_items[-1]:
-                annot = line_items[-2] + "," + line_items[-1].replace("non-coding RNA","ncRNA") # gene name and feature
+            if 'Gene_Name' in line_items:
+               igene = line_items.index('Gene_Name')+1
             else:
-                annot = ""
+                offtarget_reads = line_items[4]
+                no_bulge_offtarget_sequence = line_items[7].upper()  # Site_Sequence
+                bulge_offtarget_sequence = line_items[9]
+                target_seq = line_items[16]
+                realigned_target_seq = line_items[17]
+                coord = line_items[3].split("-")[0]
+                num_mismatch = int(line_items[8])
+
+                if "intergenic" not in line_items[igene+1]:
+                    annot = line_items[igene] + "," + line_items[igene+1].replace("non-coding RNA","ncRNA") # gene name and feature
+                else:
+                    annot = ""
 
 
-            if no_bulge_offtarget_sequence != '' or bulge_offtarget_sequence != '':
-                #print(no_bulge_offtarget_sequence,bulge_offtarget_sequence)
-                if no_bulge_offtarget_sequence:
-                    total_seq += 1
-                if bulge_offtarget_sequence:
-                    total_seq += 1
-                    #num_mismatch = 0
-                    #length = len(realigned_target_seq.strip())
-                    #for l in range(length):
-                    #    k = bulge_offtarget_sequence.strip()[l]
-                    #    j = realigned_target_seq.strip()[l]
-                    #    if k != '-' and j != '-' and k !=j:
-                    #        num_mismatch += 1
+                if no_bulge_offtarget_sequence != '' or bulge_offtarget_sequence != '':
+                    #print(no_bulge_offtarget_sequence,bulge_offtarget_sequence)
+                    if no_bulge_offtarget_sequence:
+                        total_seq += 1
+                    if bulge_offtarget_sequence:
+                        total_seq += 1
+                        #num_mismatch = 0
+                        #length = len(realigned_target_seq.strip())
+                        #for l in range(length):
+                        #    k = bulge_offtarget_sequence.strip()[l]
+                        #    j = realigned_target_seq.strip()[l]
+                        #    if k != '-' and j != '-' and k !=j:
+                        #        num_mismatch += 1
 
-                offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
-                                   'bulged_seq': bulge_offtarget_sequence.strip(),
-                                   'reads': int(offtarget_reads.strip()),
-                                   'coord': str(coord),
-                                   'annot': str(annot),
-                                   'num_mismatch': str(num_mismatch),
-                                   'target_seq': target_seq.strip(),
-                                   'realigned_target_seq': realigned_target_seq.strip()
-                                   })
+                    offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
+                                       'bulged_seq': bulge_offtarget_sequence.strip(),
+                                       'reads': int(offtarget_reads.strip()),
+                                       'coord': str(coord),
+                                       'annot': str(annot),
+                                       'num_mismatch': str(num_mismatch),
+                                       'target_seq': target_seq.strip(),
+                                       'realigned_target_seq': realigned_target_seq.strip()
+                                       })
     offtargets = sorted(offtargets, key=lambda x: x['reads'], reverse=True)
 
     return offtargets, target_seq, total_seq

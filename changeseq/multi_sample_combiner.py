@@ -60,15 +60,35 @@ def find_mm_and_bulge(df):
                 if i==j:
                     pass
                 elif i == "-":
-                    rb = 1
+                    rb += 1
                 elif j =='-':
-                    db = 1
+                    db += 1
                 else:
                     mm+=1
         subs.append(mm)
         insertions.append(rb)
         deletions.append(db)
     return subs,insertions,deletions
+
+def choose_cols(df):
+
+    keep_cols = ['Genomic Coordinate']
+    keep_cols += [x for x in df.columns if 'Nuclease_Read_Count' in x or 'Control_Read_Count' in x]
+
+    keep_cols += ['Site_Sequence','Aligned_Site_Sequence','Site_Substitution_Number',
+                  'Target_Sequence', 'Aligned_Target_Sequence',
+                  'DNA_Bulge', 'RNA_Bulge','Distance','Number of Replicates Sites found','Percent Total Reads',
+                  'Gene_Name', 'Feature', 'Cell', 'MappingPositionStart',
+                  'MappingPositionEnd', 'WindowSequence']
+
+    if 'Nuclease Base Edited' in df.columns:
+        keep_cols +=['Nuclease Base Edited', 'Nuclease Noise Base Edited','Nuclease pval','Control pval']
+    if 'gnomAD.constraint' in df.columns:
+        keep_cols += ['gnomAD.constraint', 'HPA.disease_involvement', 'COSMICS.cancer_role',
+                      'COSMICS.tier']
+
+    return keep_cols
+
 
 
 def parse_df(df,sample):
@@ -80,14 +100,22 @@ def parse_df(df,sample):
     df.loc[:,'RNA_Bulge'] = df['RNA_Bulge'].fillna(0)
     df.loc[:,'DNA_Bulge'] = df['DNA_Bulge'].fillna(0)
     df.loc[:,'Genomic Coordinate'] = df['Genomic Coordinate'].str.split('-',expand=True)[0] + df['Strand']
-    df = df.loc[:,['Genomic Coordinate','Nuclease_Read_Count', 'Control_Read_Count', 'Site_Sequence',
-             'Site_Substitution_Number','Aligned_Site_Sequence',
-             'DNA_Bulge', 'RNA_Bulge', 'Target_Sequence','Aligned_Target_Sequence',
-             'Gene_Name', 'Feature','Cell','MappingPositionStart',
-       'MappingPositionEnd', 'WindowSequence']]
+
+    dist = df.loc[:,['Site_Substitution_Number', 'RNA_Bulge', 'DNA_Bulge']].sum(1)
+    i = list(df.columns).index('DNA_Bulge')
+    df =df.insert(i+1,'Distance',dist)
+
+    df = df.insert(i+2,'Number of Replicates Sites found',1)
+
+    x = df.loc[:, 'Nuclease_Read_Count'].sum(1) / df.loc[:, 'Nuclease_Read_Count'].sum(1).sum()
+    df =df.insert(i + 3,'Percent Total Reads',x.round(5) *100)
+    keep_cols = choose_cols(df)
+    df = df.loc[:,keep_cols]
+
+
     df = df.rename(columns={'Nuclease_Read_Count': 'Nuclease_Read_Count.' + sample,
-                                         'Control_Read_Count':'Control_Read_Count.' +sample,
-                                'Description':'Description.' +sample})
+                            'Control_Read_Count': 'Control_Read_Count.' + sample,
+                            'Description':'Description.' +sample})
 
     return df
 
@@ -96,12 +124,8 @@ def join_replicates(sample1_df, sample2_df, suffixes):
     df = sample1_df.merge(sample2_df, on=['Genomic Coordinate', 'Site_Sequence'], how='outer',
                           suffixes=suffixes)
 
-    keep_cols = ['Genomic Coordinate', 'Nuclease_Read_Count' + suffixes[0], 'Nuclease_Read_Count'+ suffixes[1],
-                 'Control_Read_Count'+ suffixes[0], 'Control_Read_Count'+ suffixes[1],'Site_Sequence',
-                 'Aligned_Site_Sequence','Site_Substitution_Number',
-                 'DNA_Bulge', 'RNA_Bulge', 'Target_Sequence', 'Aligned_Target_Sequence', 'Gene_Name', 'Feature', 'Cell',
-                 'MappingPositionStart','MappingPositionEnd', 'WindowSequence'
-                 ]
+
+    keep_cols = choose_cols(df)
 
     for col in df.columns:
         if "Read_Count" in col:
@@ -114,14 +138,19 @@ def join_replicates(sample1_df, sample2_df, suffixes):
     nuclease_read_count_cols = [col for col in df.columns if "Nuclease_Read_Count" in col]
     df.loc[:,'Number of Replicates Sites found'] = (df[nuclease_read_count_cols] > 0).sum(1)
 
+
+    x = df.loc[:, nuclease_read_count_cols].sum(1) / df.loc[:, nuclease_read_count_cols].sum(1).sum()
+    df.loc[:,'Percent Total Reads'] = x.round(5) *100
+
+
     return df
 
 
 
 def swarm_plot(joined_normalized, name, figout):
     sns.set_style('white')
-    columns = [col for col in joined_normalized.columns if col.startswith('Nuc')]
-    count_dict = joined_normalized.loc[:,joined_normalized.columns.str.startswith('Nuc')].to_dict('list')
+    columns = [col for col in joined_normalized.columns if col.startswith('Nuclease_Read_Count')]
+    count_dict = joined_normalized.loc[:,joined_normalized.columns.str.startswith('Nuclease_Read_Count')].to_dict('list')
 
     # Finding the mean reading excluding 0 sites
     mean = []
@@ -165,30 +194,43 @@ def calc_jaccard(Rep1_unique,Rep2_unique,shared):
     total = Rep1_unique + Rep2_unique + shared
     return round(float(shared)/float(total)*100,2)
 
-def create_pseudo_sample(data_with_pseudocount):
-    # Compute geometric means
-    geometric_means = np.exp(
-        np.mean([np.log(counts) for counts in data_with_pseudocount.values()], axis=0)
-    )
-    return geometric_means
+
+def geo_mean(iterable):
+    a = np.array(iterable)
+    return a.prod()**(1.0/len(a))
+
+
+def create_pseudo_sample(counts):
+    pseudo_sample = []
+    for i in range(counts.shape[0]):
+        pseudo_sample.append(geo_mean(counts[i,:]))
+    return np.array(pseudo_sample)
 
 def median_normalization(count_dict):
-    epsilon = 1
     # https://divingintogeneticsandgenomics.com/post/details-in-centered-log-ratio-clr-normalization-for-cite-seq-protein-count-data/
+    normalized_data={}
 
-    data_with_pseudocount = {sample: np.array(counts) + epsilon for sample, counts in count_dict.items()}
-    pseudo_sample = create_pseudo_sample(data_with_pseudocount)  # (log_cnt1,log_cnt2)
-    ratios = {sample: np.array(counts) / pseudo_sample for sample, counts in data_with_pseudocount.items()}
+    counts = np.array(list(count_dict.values())).T.astype(float)
+    pseudo_sample = create_pseudo_sample(counts) # (log_cnt1,log_cnt2)
+    mask = pseudo_sample > 0
+    counts_f = counts[mask, :]
+    pseudo_f = pseudo_sample[mask]
+    norm_count = pseudo_f[:, None] / counts_f
+    norm_count[np.isnan(norm_count)] = 0
+    size_factor = np.zeros(np.shape(norm_count[0,:]))
+    for i in range(norm_count.shape[1]):
+        x = norm_count[:,i]
+        x = x[~np.isnan(x)]
+        size_factor[i] = np.median(x[x>0])
+    new_counts = counts * size_factor
+    #new_read_counts1 = [round(x / size_factor1, 0) for x in read_counts1]
+    #new_read_counts2 = [round(x / size_factor2, 0) for x in read_counts2]
+    new_counts = new_counts.round(0)
+    c=0
+    for k in count_dict.keys():
+        normalized_data[k] = list(new_counts[:,c].astype('int'))
+        c+=1
 
-    # Compute scaling factors
-    scaling_factors = {
-        sample: np.median(ratios[sample])
-        for sample in count_dict}
-    # Normalize counts
-    normalized_data = {
-        sample: (counts / scaling_factors[sample]).round(0)
-        for sample, counts in count_dict.items()
-    }
     return normalized_data
 
 def rpm(count_dict,depths):
@@ -247,7 +289,7 @@ def vennplot_replicates(x1,x2,sample1,sample2,figout):
     #plt.show()
     return ja
 def clean_normalized(joined_normalized,read_threshold):
-    read_columns = joined_normalized.columns.str.startswith('Nuc')
+    read_columns = joined_normalized.columns.str.startswith('Nuclease_Read_Count')
 
     # remove sites below threshold post normalization
     joined_normalized.loc[:, read_columns] = joined_normalized.loc[:,read_columns].applymap(
@@ -259,20 +301,30 @@ def clean_normalized(joined_normalized,read_threshold):
     joined_normalized.loc[:, 'Percent Total Reads'] =  joined_normalized['Percent Total Reads'].round(5) *100
 
     # make a simplified version
-    read_cols = [x for x in joined_normalized.columns if 'Nuc' in x]
-    keep_cols = ['Genomic Coordinate'] + read_cols + ['Aligned_Site_Sequence',
-                                                      'Site_Substitution_Number', 'DNA_Bulge', 'RNA_Bulge',
-                                                      'Number of Replicates Sites found', 'Percent Total Reads',
-                                                      'Aligned_Target_Sequence', 'Gene_Name', 'Feature', 'Cell']
+    read_cols = choose_cols(joined_normalized)
 
     joined_simplified_report =  joined_normalized.loc[:, keep_cols ].copy()
     return joined_normalized, joined_simplified_report
 
+def drop_large_controls(df,read_threshold):
+    df2 = df.copy()
+    df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'] - (df2['Control_Read_Count'] * 2)
+    df2 = df2.loc[df2['Nuclease_Read_Count']>=read_threshold,:]
+    df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'].round(0).astype('int')
+
+    return df2
+
+
 
 def normalize(joined,qcfiles,normalization_method,read_threshold):
+    count_dict = joined.loc[:,joined.columns.str.startswith('Nuclease_Read_Count')].to_dict('list')
+    ## check if at least 5% of the sites are matching. if not then skip normalization:
+    pt = 1-sum([x.count(0) for x in count_dict.values()])/len(list(count_dict.values())[0])
 
-    count_dict = joined.loc[:,joined.columns.str.startswith('Nuc')].to_dict('list')
-    if normalization_method == "median":
+    if pt < 0.05:
+        norm_count_dict = count_dict
+        logger.info(f'Not enough overlapping sites to normalize {count_dict.keys()}')
+    elif normalization_method == "median":
         norm_count_dict = median_normalization(count_dict)
     elif normalization_method == "rpm":
         depths =get_read_depth(qcfiles)
@@ -343,6 +395,7 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
         sample = replicates['sample_name'][i]
         df = pd.read_csv(infile)
         df = parse_df(df,sample)
+        df = drop_large_controls(df,read_threshold)
 
         if first_file:
             joined = df

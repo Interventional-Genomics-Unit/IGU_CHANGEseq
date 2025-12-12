@@ -76,14 +76,22 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
 
     return_dict = {}
     for param,default_s in default.items():
-        if param in settings_dict.keys():
-            return_dict[param] = settings_dict[param]
-        else:
-            return_dict[param] = default[param]
 
-    for x in ['window_size','gap_threshold','read_threshold','start_threshold','search_radius','mismatch_threshold','mapq_threshold','AG_read']:
-        return_dict[x] = int(return_dict[x])
-        logger.info(f'{x} is set to {str(return_dict[x])}')
+        if param in settings_dict.keys():
+            try:
+                return_dict[param] = int(settings_dict[param]) if type(settings_dict[param]) != bool else settings_dict[param]
+            except Exception:
+                return_dict[param] = settings_dict[param]
+        else:
+            try:
+
+                return_dict[param] = int(default[param]) if type(default[param]) != bool else default[param]
+            except Exception:
+                return_dict[param] = default[param]
+        if type(return_dict[param]) != dict:
+            logger.info(f'{param} is set to {str(return_dict[param])}')
+
+
 
     for x in ['merged_analysis','variant_analysis']:
         return_dict[x] =False if str(return_dict[x]) == 'False' or str(return_dict[x]) == 'FALSE' else True

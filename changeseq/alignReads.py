@@ -3,7 +3,7 @@ alignReads
 """
 
 from __future__ import print_function
-
+import sys
 import subprocess
 import os
 import logging
@@ -11,18 +11,13 @@ import logging
 logger = logging.getLogger('root')
 logger.propagate = False
 
-def alignReads(BWA_path, HG19_path, read1, read2, outfile):
+def alignReads(sample_name,BWA_path, HG19_path, read1, read2, outfile,be_flag):
 
-    sample_name = os.path.basename(outfile).split('.sam')[0]
+    #outputfile
     output_folder = os.path.dirname(outfile)
-    base_name = os.path.join(output_folder, sample_name)
-    #sam_filename = outfile
-    bam_filename = base_name + '.bam'
+    bam_filename = f"{output_folder}/{sample_name}.bam"
     sorted_bam_file = f"{output_folder}/{sample_name}_sorted.bam"
     name_sorted_bam_file = f"{output_folder}/{sample_name}_name_sorted.bam"
-
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
 
     # Check if genome is already indexed by bwa
     index_files_extensions = ['.pac', '.amb', '.ann', '.bwt', '.sa']
@@ -46,35 +41,31 @@ def alignReads(BWA_path, HG19_path, read1, read2, outfile):
     # Run paired end alignment against the genome
     logger.info('Running paired end mapping for {0}'.format(sample_name))
     bwa_alignment_command = f'{BWA_path} mem -t 48 {HG19_path} {read1} {read2} | samtools view -bS - > {bam_filename}'
+    subprocess.call(bwa_alignment_command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+
 
     # samtools sort
-    samtools_sort_command = f'samtools sort -o {bam_filename.replace(".bam","_sorted.bam")} {bam_filename}'
-    samtools_index_command = f'samtools index {bam_filename.replace(".bam","_sorted.bam")};rm {bam_filename}'
-    samtools_sort_by_name_command = f'samtools sort -o {name_sorted_bam_file} -n {sorted_bam_file}' #;samtools index {name_sorted_bam_file}'
+    samtools_sort_command = f"samtools view -@ 48 -h -F 4 {bam_filename} | awk '$3 != \"chrM\" || $1 ~ /^@/' | samtools sort -@ 48 -o {sorted_bam_file}"
 
-    #bwa_alignment_command = '{0} mem -t 48 {1} {2} {3} > {4}'.format(BWA_path, HG19_path, read1, read2, sam_filename)
-    #samtools_sam_to_bam_command = 'samtools sort -o {0} {1}'.format(bam_filename, sam_filename)
-    #samtools_index_command = 'samtools index {0}'.format(bam_filename)
-    #samtools_sort_by_name_command = 'samtools sort -o {0} -n {1}'.format("".join([base_name, '_sorted.bam']), bam_filename)
+    samtools_index_command = f'samtools index {sorted_bam_file}' #;rm {bam_filename}'
+    samtools_sort_by_name_command = f'samtools sort -n -o {name_sorted_bam_file} {sorted_bam_file}' # ; samtools index {name_sorted_bam_file}'
+    #samtools_cp_index_command = f'cp {sorted_bam_file}.bai {name_sorted_bam_file}.bai'
 
-    # Open the outfile and redirect the output of the alignment to it.
-    logger.info(bwa_alignment_command)
-    subprocess.check_call(bwa_alignment_command, shell=True)
-    logger.info('Paired end mapping for {0} completed.'.format(sample_name))
 
-    # Convert SAM to BAM file
+    # sort bam and index bam
+    logger.info('samtools sort bam file')
     logger.info(samtools_sort_command)
-    subprocess.check_call(samtools_sort_command, shell=True)
-    logger.info('Sorting by coordinate position for {0} complete.'.format(sample_name))
+    subprocess.call(samtools_sort_command, shell=True,stdout=sys.stdout,stderr=sys.stderr)
 
-    # Index BAM file
+    logger.info('samtools index sorted bam file')
     logger.info(samtools_index_command)
-    subprocess.check_call(samtools_index_command, shell=True)
-    logger.info('Indexing for {0} complete.'.format(sample_name))
+    subprocess.call(samtools_index_command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
-    # Sort BAM file by name
-    logger.info(samtools_sort_by_name_command)
-    subprocess.check_call(samtools_sort_by_name_command, shell=True)
-    logger.info('Sorting for {0} by name complete.'.format(sample_name))
+    if not be_flag:
+        #additional sorting by name needed for HTS in regular CHANGE-seq
+        logger.info(samtools_sort_by_name_command)
+        logger.info('Sorting for {0} by name complete.'.format(sample_name))
+        subprocess.call(samtools_sort_by_name_command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
 
-    os.rename(sorted_bam_file + ".bai", name_sorted_bam_file + ".bai")
+        os.rename(name_sorted_bam_file, sorted_bam_file)
+        #subprocess.call(samtools_cp_index_command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
