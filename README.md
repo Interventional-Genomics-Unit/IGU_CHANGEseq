@@ -1,13 +1,14 @@
-# IGU CHANGE-seq
+# IGI CHANGE-seq & CHANGE-seq BE
  An extension of CHANGE-seq for Off-Target Site Nomination
  https://github.com/tsailabSJ/changeseq
  
-IGU Added Features:
+Added Features:
 
 * updated to Python3
+* ability to limit search with bulges
+* ability to limit search with edit distance
 * simple .csv sample manifest
 * removal of TN5 ME adapters and illumina adapter (unmerged version only)
-* Optional UMI deduplication
 * replicate combination
 * normalization of replicates - (median-of-ratios or rpm)
 * QC metrics of alignments and fastq circularization read composition
@@ -77,18 +78,24 @@ The manifest file has the following .csv file
 - `bwa`: The absolute path to the `bwa` executable
 - `samtools`: The absolute path to the `samtools` executable
 - `cutadapt`: The absolute path to the `cutadapt` executable
+- `merged_analysis`: Whether or not the paired read merging step should taking (highly recommend not using) default = False
 - `read_threshold`: The minimum number of reads at a location for that location to be called as a site. We recommend leaving it to the default value of 4.
-- `window_size`: Size of the sliding window, we recommend leaving it to the default value of 3.
-- `mapq_threshold`: Minimum read mapping quality score. We recommend leaving it to the default value of 50.
+- `window_size`: Size of the sliding window, we recommend leaving it to the default value of 30.
+- `mapq_threshold`: Minimum read mapping quality score. We recommend leaving it to the default value of 40.
 - `start_threshold`: Tolerance for breakpoint location. We recommend leaving it to the default value of 1.
 - `gap_threshold`: Distance between breakpoints. We recommend leaving it to the default value of 3 for Cas9.
-- `mismatch_threshold`: Number of tolerated gaps in the fuzzy target search setp. We recommend leaving it to the default value of 6.
+- `mismatch_threshold`: Number of tolerated mismatches in the fuzzy target search step. We recommend leaving it to the default value of 6.
+- `edist_threshold`: Maximum edit (levenshtein) distance in the fuzzy target search step. default=7
+- `bulge_threshold`: Number of tolerated indels (bulges) in the fuzzy target search step. default=1
 - `read_length`: Fastq file read length, default is 151.
 - `PAM`: PAM sequence, default is NGG.
-- `merged_analysis`: Whether or not the paired read merging step should taking (highly recommend not using) default = False
-- `dedup_umi`: Whether or not the dedupliucation of UMIs step should taking True or False, default = False
-- `bc_pattern`: If umi deduplication is taking place, which barcode pattern should be given to UMI tools, default=none
+- `search_radius`: in addition to the window size, how far away from the cut site to search for search
 - `normalize`: normalization method to use for replicates "none", "median" or "rpm", default=median
+
+For BE analysis
+- `BEsearch_radius`: In addition to the window size, how far away from the overlap to search for search 
+- `BEmodel_min_overlap`: Min. overlap between reads required. Ex. a value of 2 means the nCas9 would nick 2bp from the deaminase. Highly recommended keeping this at 2.
+- `BEmodel_max_overlap`: Max overlap between reads required. Ex. a value of 15 means the nCas9 would nick 15bp from the deaminase. 
 
 
 ### Pipeline commands (must be run alongside samples command)
@@ -107,6 +114,7 @@ The manifest file has the following .csv file
 - `raw_fastq_folder`:The absolute path to the folder in which all raw fastq files are stored.
 - `all`: runs all samples in manifest
 - `sample_name`: runs the specific sample indicated
+- `base-editing`: run CHANGE-seq BE (T or F). default=F
 
 
 ## Pipeline Results

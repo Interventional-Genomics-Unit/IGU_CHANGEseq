@@ -45,14 +45,15 @@ def parseSitesFile(infile):
 
             if 'Gene_Name' in line_items:
                igene = line_items.index('Gene_Name')+1
+
             else:
-                offtarget_reads = line_items[4]
+                offtarget_reads = line_items[5]
                 no_bulge_offtarget_sequence = line_items[7].upper()  # Site_Sequence
-                bulge_offtarget_sequence = line_items[9]
+                bulge_offtarget_sequence = line_items[8].upper()
                 target_seq = line_items[16]
                 realigned_target_seq = line_items[17]
                 coord = line_items[3].split("-")[0]
-                num_mismatch = int(line_items[8])
+                num_mismatch = int(line_items[9])
 
                 if "intergenic" not in line_items[igene+1]:
                     annot = line_items[igene] + "," + line_items[igene+1].replace("non-coding RNA","ncRNA") # gene name and feature

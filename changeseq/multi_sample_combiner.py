@@ -103,12 +103,12 @@ def parse_df(df,sample):
 
     dist = df.loc[:,['Site_Substitution_Number', 'RNA_Bulge', 'DNA_Bulge']].sum(1)
     i = list(df.columns).index('DNA_Bulge')
-    df =df.insert(i+1,'Distance',dist)
+    df.insert(i+1,'Distance',dist)
 
-    df = df.insert(i+2,'Number of Replicates Sites found',1)
+    df.insert(i+2,'Number of Replicates Sites found',1)
 
-    x = df.loc[:, 'Nuclease_Read_Count'].sum(1) / df.loc[:, 'Nuclease_Read_Count'].sum(1).sum()
-    df =df.insert(i + 3,'Percent Total Reads',x.round(5) *100)
+    x = df.loc[:, 'Nuclease_Read_Count'] / df.loc[:, 'Nuclease_Read_Count'].sum()
+    df.insert(i + 3,'Percent Total Reads',x.round(5) *100)
     keep_cols = choose_cols(df)
     df = df.loc[:,keep_cols]
 
@@ -301,18 +301,18 @@ def clean_normalized(joined_normalized,read_threshold):
     joined_normalized.loc[:, 'Percent Total Reads'] =  joined_normalized['Percent Total Reads'].round(5) *100
 
     # make a simplified version
-    read_cols = choose_cols(joined_normalized)
+    keep_cols = choose_cols(joined_normalized)
 
     joined_simplified_report =  joined_normalized.loc[:, keep_cols ].copy()
     return joined_normalized, joined_simplified_report
 
-def drop_large_controls(df,read_threshold):
-    df2 = df.copy()
-    df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'] - (df2['Control_Read_Count'] * 2)
-    df2 = df2.loc[df2['Nuclease_Read_Count']>=read_threshold,:]
-    df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'].round(0).astype('int')
-
-    return df2
+# def drop_large_controls(df,read_threshold):
+#     df2 = df.copy()
+#     df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'] - (df2['Control_Read_Count'] * 2)
+#     df2 = df2.loc[df2['Nuclease_Read_Count']>=read_threshold,:]
+#     df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'].round(0).astype('int')
+#
+#     return df2
 
 
 
@@ -395,7 +395,7 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
         sample = replicates['sample_name'][i]
         df = pd.read_csv(infile)
         df = parse_df(df,sample)
-        df = drop_large_controls(df,read_threshold)
+        #df = drop_large_controls(df,read_threshold)
 
         if first_file:
             joined = df

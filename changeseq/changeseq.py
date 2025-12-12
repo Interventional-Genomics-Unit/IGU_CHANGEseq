@@ -318,20 +318,18 @@ class CircleSeq:
     def QC(self):
         logger.info('Starting QC')
         if self.parameters['merged_analysis']:
-            pass
-        try:
-            for sample in self.parameters['samples']:
-                pass
+            # try:
+                # for sample in self.parameters['samples']:
 
-                logger.info('Running fastq quality and adapter analysis for {0}'.format(sample))
-                fastqc_logfile = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '.html')
+                # logger.info('Running fastq quality and adapter analysis for {0}'.format(sample))
+                # fastqc_logfile = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '.html')
+                #
+                # fastqQC(self.parameters['samples'][sample]['read1'],
+                #         self.parameters['samples'][sample]['read2'],
+                #         fastqc_logfile)
 
-                fastqQC(self.parameters['samples'][sample]['read1'],
-                        self.parameters['samples'][sample]['read2'],
-                        fastqc_logfile)
-
-        except Exception as e:
-            logger.error('Error with Fastqc')
+            # except Exception as e:
+            #logger.error('Error with Fastqc')
 
         try:
             for sample in self.parameters['samples']:
@@ -354,7 +352,6 @@ class CircleSeq:
                 preprocessed_logfile =  os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_trim_log.txt')
                 coverage_stat_file  = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_aligned_stats.txt')
                 qc_file = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_qc_report.txt')
-
                 write_qc(qc_file, preprocessed_logfile, coverage_stat_file)
 
         except Exception as e:
