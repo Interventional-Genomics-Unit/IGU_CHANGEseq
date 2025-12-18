@@ -4,19 +4,17 @@
  
 Added Features:
 
-* updated to Python3
-* ability to limit search with bulges
-* ability to limit search with edit distance
-* simple .csv sample manifest
-* removal of TN5 ME adapters and illumina adapter (unmerged version only)
+* All in one BE and Cas python updated to Python3
+* Search with unlimited bulge and edit distance thresholds
 * replicate combination
 * normalization of replicates - (median-of-ratios or rpm)
+* simple .csv sample manifest
+* removal of TN5 ME adapters and illumina adapter (unmerged version only)
 * QC metrics of alignments and fastq circularization read composition
 * identified site bam file for use with IGV
 * genomic annotation to sites
 * more plotting options - venn diagram, swarmplot and more
 * Fixed variant analysis bug
-* coming soon: dual BE and Cas pipline 
 
 
  ## Installation

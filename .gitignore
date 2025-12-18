@@ -1,6 +1,6 @@
 /changeseq/unconnected_scripts/
-CHANGEseq_wrapper.sh
-make_yaml.py
+/CHANGEseq_wrapper.sh
+/make_yaml.py
 /changeseq/replicate_combiner.py
 /changeseq/dev/internal_annotations.py
 /changeseq/tsailabSJ_dev_scripts/
