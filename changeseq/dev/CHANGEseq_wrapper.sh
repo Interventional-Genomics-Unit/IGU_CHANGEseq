@@ -1,8 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name IGU_CHANGEseq
-#SBATCH -n 32
-#SBATCH -o %j.out
-#SBATCH -e %j.err
+
 
 
 ## ACTIVATE CONDA
