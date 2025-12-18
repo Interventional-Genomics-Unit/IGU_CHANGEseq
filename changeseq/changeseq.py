@@ -94,11 +94,11 @@ class CircleSeq:
             self.parameters['samples'][sample]['read1'] = sample_read1_outfile
             self.parameters['samples'][sample]['read2'] = sample_read2_outfile
 
-            cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_control_trim_log.txt')
+            cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', "control_"+ sample + 'trim_log.txt')
             control_read1_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
-                                                 sample + '_R1_processesed_control.fastq.gz')
+                                                 "control_"+sample + '_R1_processesed.fastq.gz')
             control_read2_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
-                                                 sample + '_R2_processesed_control.fastq.gz')
+                                                 "control_" + sample + '_R2_processesed.fastq.gz')
 
 
             for f in [cutadapt_logfile,control_read1_outfile,control_read2_outfile]:
@@ -176,7 +176,7 @@ class CircleSeq:
                                sample_alignment_path,
                                self.be_flag)
 
-                    for ext in ["_sorted.bam", "_sorted.bam.bai"]:
+                    for ext in [".bam","_sorted.bam", "_sorted.bam.bai"]:
                         run_control_flag = check_control_exists(sample=sample,
                                                                 representative_control=self.representative_controls[
                                                                     sample],
@@ -303,13 +303,14 @@ class CircleSeq:
         logger.info('Normalizing and Joining reads')
         for rep_group_name,replicates in self.parameters['replicates'].items():
             infiles = []
-            qcfiles = []
+            pklfiles = []
             for sample in self.parameters['replicates'][rep_group_name]['sample_name']:
                 infiles.append(os.path.join(self.parameters["analysis_folder"], 'raw_results/tables',
                                             sample + '_identified_matched_annotated.csv'))
-                qcfiles.append(os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_qc_report.txt'))
+                pklfiles.append(os.path.join(self.parameters["analysis_folder"], 'raw_results/tables', sample + '_total_counts.pkl'))
+
             outfolder = os.path.join(self.parameters["analysis_folder"],'post-process_results/')
-            process_results(rep_group_name, replicates, infiles, qcfiles,
+            process_results(rep_group_name, replicates, infiles, pklfiles,
                             outfolder=outfolder,
                             normalization_method=self.parameters['normalize'],
                             read_threshold = int(self.parameters['read_threshold']), PAM=self.parameters["PAM"])
@@ -317,7 +318,6 @@ class CircleSeq:
 
     def QC(self):
         logger.info('Starting QC')
-        if self.parameters['merged_analysis']:
             # try:
                 # for sample in self.parameters['samples']:
 
@@ -333,15 +333,15 @@ class CircleSeq:
 
         try:
             for sample in self.parameters['samples']:
-                #if self.merged_analysis:
+
                 script_path = p_dir + "/QC_matched_alignment.sh"
                 logger.info('Running alignment coverage QC for {0}'.format(sample))
-                coverage_command = 'sh {0} {1} {2}'.format(script_path,
-                     sample, self.parameters["analysis_folder"])
-                logger.info(coverage_command)
-                subprocess.check_call(coverage_command, shell=True)
-                logger.info('OT Coverage for {0} completed.'.format(sample))
 
+                coverage_command = f'sh {script_path} {sample} {"control_" + sample} {self.parameters["analysis_folder"]}'
+
+                logger.info(coverage_command)
+                #subprocess.check_call(coverage_command, shell=True)
+                logger.info('OT Coverage for {0} completed.'.format(sample))
         except Exception as e:
             logger.error('Error with alignment coverage QC ')
             logger.error('skipping....')
@@ -353,6 +353,12 @@ class CircleSeq:
                 coverage_stat_file  = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_aligned_stats.txt')
                 qc_file = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_qc_report.txt')
                 write_qc(qc_file, preprocessed_logfile, coverage_stat_file)
+
+                preprocessed_logfile =  os.path.join(self.parameters["analysis_folder"], 'preprocessed', 'control_' + sample + '_trim_log.txt')
+                coverage_stat_file  = os.path.join(self.parameters["analysis_folder"], 'qc', 'control_' + sample + '_aligned_stats.txt')
+                qc_file = os.path.join(self.parameters["analysis_folder"], 'qc', 'control_' + sample + '_qc_report.txt')
+                write_qc(qc_file, preprocessed_logfile, coverage_stat_file)
+
 
         except Exception as e:
             logger.error('Error with QC report')
@@ -572,11 +578,11 @@ def main():
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.processReads()
         c.alignReads()
+        c.QC()
         c.findCleavageSites()
         c.addAnnotations()
         c.visualize()
         c.analyze()
-        c.QC()
         c.callVariants()
     elif args.command == 'parallel':
         c = CircleSeq()
@@ -590,11 +596,11 @@ def main():
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.alignReads()
+        c.QC()
         c.findCleavageSites()
         c.addAnnotations()
         c.visualize()
         c.analyze()
-        c.QC()
     elif args.command == 'identify':
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)

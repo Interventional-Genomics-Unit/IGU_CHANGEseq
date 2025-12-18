@@ -3,3 +3,5 @@ CHANGEseq_wrapper.sh
 make_yaml.py
 /changeseq/replicate_combiner.py
 /changeseq/dev/internal_annotations.py
+/changeseq/tsailabSJ_dev_scripts/
+/changeseq/visualization.py

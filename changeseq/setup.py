@@ -13,10 +13,10 @@ else:
 	long_description="change-seq"
 
 setup(
-	name='changeseq',
-	version=str(changeseq.__version__), # update visualization, run homer peak annotation if available
+	name='IGI CHANGE-seq',
+	#version=str(changeseq.__version__), # update visualization, run homer peak annotation if available
 	description="Bioinformatic pipeline for the CHANGE-seq assay.",
-	author="Shengdar Q Tsai, Martin Aryee, Ved V Topkar, Jose Malagon-Lopez",
+	author="adapted from Shengdar Q Tsai, Martin Aryee, Ved V Topkar, Jose Malagon-Lopez",
 	author_email='STSAI4@mgh.harvard.edu, Aryee.Martin@mgh.harvard.edu, vedtopkar@gmail.com, jose.lopez@mail.harvard.edu',
 	url='https://github.com/tsailabSJ/changeseq',
 	# packages=['changeseq','data'],

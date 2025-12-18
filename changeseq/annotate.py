@@ -1,4 +1,5 @@
 import subprocess
+from subprocess import Popen, PIPE
 from Bio.Seq import Seq
 import pandas as pd
 import logging
@@ -284,21 +285,90 @@ class Transcript:
 
 
 
+def merge_impact_annotations(coords,impact_bed):
+    # Sort bedfile
+    bed_data = ""
+    for coord in coords:
+        coord_field = coord.split(':')
+        chrom = coord_field[0]
+        start = coord_field[1].split('-')[0]
+        end = coord_field[1].split('-')[1]
+        line = "\t".join([chrom, start, end])
+        bed_data += line + "\n"
+
+    sort_cmd = ['bedtools', 'sort', '-i', "stdin"]
+
+    sorted_bed = Popen(
+        sort_cmd,
+        stdin=PIPE,
+        stdout=PIPE,
+        text=True
+    )
+    sorted_output, sort_error = sorted_bed.communicate(input=bed_data)
+    sorted_bed.wait()
+
+    if sort_error:
+        print("Error during sorting:", sort_error)
+        return []
+
+    else:
+        # Pipe the sorted BED models directly to `bedtools window`
+        window_cmd = ["bedtools", "window", "-w", "5", "-a", "stdin", "-b", impact_bed]
+        window_output = Popen(
+            window_cmd,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE,
+            text=True
+        )
+
+        # Run the command and capture the output
+        bedtools_out, stderr = window_output.communicate(input=sorted_output)
+        window_output.wait()
+
+        if window_output.returncode == 0:
+            pass
+        else:
+            print("Error:", stderr)
+
+        bed_entries = bedtools_out.split('\n')[:-1]
+        return bed_entries
+
+
+def write_merged_bed(res_data,bed_entries):
+
+    impact = pd.DataFrame([bed_entry.split("\t") for bed_entry in bed_entries],columns = ['Chr', 'Start', 'End','a','b','c','gnomAD.constraint',
+                                                                                          'HPA.disease_involvement' , 'COSMICS.cancer_role','COSMICS.tier'])
+
+    impact['Start'] = impact['Start'].astype('int')
+    impact['End'] = impact['End'].astype('int')
+    impact = impact.drop(columns = ['a','b','c'])
+
+    res_data = pd.merge(res_data,impact, on=['Chr', 'Start', 'End'], how='outer')
+    res_data[[ 'HPA.disease_involvement' , 'COSMICS.cancer_role',
+       'COSMICS.tier']] = res_data[['HPA.disease_involvement' , 'COSMICS.cancer_role',
+       'COSMICS.tier']].fillna('nan')
+    res_data['COSMICS.tier']=res_data['COSMICS.tier'].astype('str').replace('nan',0).astype('float')
+
+
+    return res_data
 
 ##annotation files
 def annotate(identify_file, annotate_path):
+    impact_bed = '/groups/clinical/projects/taylorh/CRISPRimpact_database/impact_annotations.bed'
 
+    outfile_name = identify_file.strip('.txt') + '_annotated.csv'
     res_data = pd.read_csv(identify_file, sep='\t')
     coords = list(res_data['Genomic Coordinate'])
     Transcript.load_transcripts(annotate_path,coords)
-    res_data = res_data.rename(columns={'Chromosome': 'Chr'})
+    res_data = res_data.rename(columns={'#Chromosome': 'Chr'})
     Feature,Gene_Name,Distance  = list(), list(), list()
 
     for coord in coords:
         tx = Transcript.transcript(coord)
 
-        if tx == 'intergenic':
-            Feature.append('intergenic')
+        if 'intergenic' in tx.feature:
+            Feature.append(tx.feature)
             Gene_Name.append('-')
 
         else:
@@ -307,6 +377,18 @@ def annotate(identify_file, annotate_path):
 
     res_data['Gene_Name'] = Gene_Name
     res_data['Feature'] = Feature
+
+
+    try:
+        bed_entries = merge_impact_annotations(coords,impact_bed)
+        res_data=  write_merged_bed(res_data,bed_entries)
+    except:
+        pass
+
+    res_data.loc[:,'RNA_Bulge'] = res_data['RNA_Bulge'].fillna(0)
+    res_data.loc[:,'DNA_Bulge'] = res_data['DNA_Bulge'].fillna(0)
     res_data = res_data.sort_values('Nuclease_Read_Count',ascending = False)
-    outfile_name = identify_file.strip('.txt') +'_annotated.csv'
+    res_data = res_data.drop_duplicates(subset=['Chr','Start','End'])
+
+
     res_data.to_csv(outfile_name, index = False)

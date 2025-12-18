@@ -6,6 +6,9 @@ import argparse
 import logging
 from matplotlib_venn import venn2
 from visualize import *
+import pickle
+
+
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -18,10 +21,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 ## along with strip plots, venn diagrams and swarmlots.
 ################
 
-
-#global colors
-#colors = {'sample1': '#8FBC8F',
-#          'sample2': '#029386'}  # , 'T': '#D8BFD8', 'C': '#8FBC8F', 'N': '#AFEEEE', 'R': '#3CB371', '-': '#E6E6FA'}
 logger = logging.getLogger('root')
 logger.propagate = False
 
@@ -30,22 +29,26 @@ colors = ['#406061', '#96BA66', '#B45C20','#718CA0',"#5C842F"]
 
 def check_file(file):
     if os.path.isfile(file):
-        pass
+        return True
     else:
         logger.info(f"{file} is not your directory")
+        return False
 
-def get_read_depth(qcfiles):
-    depths = []
-    for file in qcfiles:
-        check_file(file)
-        line = open(file).readline()
-        if 'total_reads:' in line:
-            depths.append(int(line.split(':')[-1].strip().replace(",","")))
+def get_read_depth(pklfiles):
+    depths = [[],[]]
+
+    for file in pklfiles:
+        if check_file(file):
+            with open(file, 'rb') as f:
+                data = pickle.load(f)
+            depths[0].append(int(data['total nuclease count']))
+            depths[1].append(int(data['total control count']))
         else:
             logger.info(f'Total read depth for {file} could not be found for tpm normalization')
-            logger.info('Re-run QC or choose another normalization method')
-            exit()
+            logger.info('Running without normalizing')
     return depths
+
+
 
 def find_mm_and_bulge(df):
     subs,insertions,deletions = [],[],[]
@@ -81,8 +84,8 @@ def choose_cols(df):
                   'Gene_Name', 'Feature', 'Cell', 'MappingPositionStart',
                   'MappingPositionEnd', 'WindowSequence']
 
-    if 'Nuclease Base Edited' in df.columns:
-        keep_cols +=['Nuclease Base Edited', 'Nuclease Noise Base Edited','Nuclease pval','Control pval']
+    keep_cols += [x for x in df.columns if 'Edited' in x or 'Noise' in x]
+
     if 'gnomAD.constraint' in df.columns:
         keep_cols += ['gnomAD.constraint', 'HPA.disease_involvement', 'COSMICS.cancer_role',
                       'COSMICS.tier']
@@ -107,8 +110,9 @@ def parse_df(df,sample):
 
     df.insert(i+2,'Number of Replicates Sites found',1)
 
-    x = df.loc[:, 'Nuclease_Read_Count'] / df.loc[:, 'Nuclease_Read_Count'].sum()
+    x = (df.loc[:, 'Nuclease_Read_Count'] / df.loc[:, 'Nuclease_Read_Count'].sum()).round(3)
     df.insert(i + 3,'Percent Total Reads',x.round(5) *100)
+
     keep_cols = choose_cols(df)
     df = df.loc[:,keep_cols]
 
@@ -121,19 +125,24 @@ def parse_df(df,sample):
 
 
 def join_replicates(sample1_df, sample2_df, suffixes):
-    df = sample1_df.merge(sample2_df, on=['Genomic Coordinate', 'Site_Sequence'], how='outer',
+    df = sample1_df.merge(sample2_df, on=['Genomic Coordinate'], how='outer',
                           suffixes=suffixes)
-
-
-    keep_cols = choose_cols(df)
+    keep_cols = choose_cols(sample1_df)
 
     for col in df.columns:
         if "Read_Count" in col:
             df.loc[:,col] = df[col].fillna(0)
+        if "Edited" in col:
+            df.loc[:,col] = df[col].fillna(0)
+        if "Noise" in col:
+            df.loc[:,col] = df[col].fillna(0)
 
-    for col in keep_cols[keep_cols.index( 'Aligned_Site_Sequence'):]:
-        df.loc[:,col] = df[f'{col}{suffixes[0]}'].fillna(df[f'{col}{suffixes[1]}'])
-        df = df.drop(columns=[f'{col}{suffixes[0]}', f'{col}{suffixes[1]}'])
+
+    for col in keep_cols[keep_cols.index( 'Site_Sequence'):]:
+        if "Edited" not in col:
+            if "Noise" not in col:
+                df.loc[:,col] = df[f'{col}{suffixes[0]}'].fillna(df[f'{col}{suffixes[1]}'])
+                df = df.drop(columns=[f'{col}{suffixes[0]}', f'{col}{suffixes[1]}'])
 
     nuclease_read_count_cols = [col for col in df.columns if "Nuclease_Read_Count" in col]
     df.loc[:,'Number of Replicates Sites found'] = (df[nuclease_read_count_cols] > 0).sum(1)
@@ -141,7 +150,6 @@ def join_replicates(sample1_df, sample2_df, suffixes):
 
     x = df.loc[:, nuclease_read_count_cols].sum(1) / df.loc[:, nuclease_read_count_cols].sum(1).sum()
     df.loc[:,'Percent Total Reads'] = x.round(5) *100
-
 
     return df
 
@@ -209,6 +217,7 @@ def create_pseudo_sample(counts):
 def median_normalization(count_dict):
     # https://divingintogeneticsandgenomics.com/post/details-in-centered-log-ratio-clr-normalization-for-cite-seq-protein-count-data/
     normalized_data={}
+    scaling_factors = {}
 
     counts = np.array(list(count_dict.values())).T.astype(float)
     pseudo_sample = create_pseudo_sample(counts) # (log_cnt1,log_cnt2)
@@ -228,18 +237,19 @@ def median_normalization(count_dict):
     new_counts = new_counts.round(0)
     c=0
     for k in count_dict.keys():
+        scaling_factors[k] = size_factor[c]
         normalized_data[k] = list(new_counts[:,c].astype('int'))
         c+=1
-
-    return normalized_data
+    return normalized_data, scaling_factors
 
 def rpm(count_dict,depths):
     # uses a total count scaling method
 
-    min_depth = np.min(depths)
+
+    mean_depth = np.mean(depths)
 
     scaling_factors = {
-        sample: min_depth / depths[i]
+        sample: mean_depth / depths[i]
         for i,sample in enumerate(list(count_dict.keys()))
     }
 
@@ -247,7 +257,7 @@ def rpm(count_dict,depths):
         sample: (np.array(counts) * scaling_factors[sample]).round(0)
         for sample, counts in count_dict.items()
     }
-    return normalized_data
+    return normalized_data, scaling_factors
 
 
 def scatter_plot(x1,x2,name,figout):
@@ -288,12 +298,55 @@ def vennplot_replicates(x1,x2,sample1,sample2,figout):
     plt.savefig(figout, bbox_inches='tight')
     #plt.show()
     return ja
+
+def scale_all_counts(joined,scaling_factors,depths):
+    depths = np.array(depths)
+    cntl_scaling_factors = np.mean(np.array(depths[0])) / depths[1]
+    i =0
+    for sample,sf in scaling_factors.items():
+        ctl_sf = cntl_scaling_factors[i]
+        rep = sample.split("Count.")[-1]
+        joined[f'Nuclease_Edited.{rep}'] = (joined[f'Nuclease_Edited.{rep}'] * sf).round(3)
+        joined[f'Nuclease_Noise.{rep}'] =(joined[f'Nuclease_Noise.{rep}'] * sf).round(3)
+        joined[f'Control_Edited.{rep}'] = (joined[f'Control_Edited.{rep}'] * ctl_sf).round(3)
+        joined[f'Control_Noise.{rep}'] = (joined[f'Control_Noise.{rep}'] * ctl_sf).round(3)
+        i+=1
+    return joined
+
+def scale_control_counts(joined,norm_count_dict,depths):
+    # not ideal if using median norm for nuclease counts
+    depths = np.array(depths)
+    cntl_scaling_factors = np.mean(np.array(depths[0])) / depths[1]
+    i = 0
+    for sample in norm_count_dict.keys():
+         rep = sample.split("Count.")[-1]
+         joined[f'Control_Read_Count.{rep}'] = (joined[f'Control_Read_Count.{rep}'] * cntl_scaling_factors[i]).round(3)
+         i+=1
+    return  joined
+
+def LFC(joined_normalized):
+    '''
+    LFC between Nuclease reads only
+    Not the best but something for now
+    '''
+    alpha = 1
+    i = list(joined_normalized.columns).index('Site_Sequence')
+
+    identified = joined_normalized.loc[:,joined_normalized.columns.str.startswith("Nuclease_Read_Count")].sum(1) + alpha
+    noise = joined_normalized.loc[:,joined_normalized.columns.str.startswith("Nuclease_Noise")].sum(1) +alpha
+    lfc = np.log2(identified / noise).round(4)
+    joined_normalized.insert(i , 'LFC', lfc)
+
+
+    return joined_normalized
+
 def clean_normalized(joined_normalized,read_threshold):
     read_columns = joined_normalized.columns.str.startswith('Nuclease_Read_Count')
 
     # remove sites below threshold post normalization
     joined_normalized.loc[:, read_columns] = joined_normalized.loc[:,read_columns].applymap(
         lambda x: 0 if x and x < read_threshold else x)
+
     keep_rows = joined_normalized.loc[:, read_columns].sum(1) != 0
     joined_normalized = joined_normalized.loc[keep_rows, :].copy()
     joined_normalized.loc[:,'Number of Replicates Sites found'] = (joined_normalized.loc[:, read_columns] > 0).sum(1)
@@ -302,38 +355,55 @@ def clean_normalized(joined_normalized,read_threshold):
 
     # make a simplified version
     keep_cols = choose_cols(joined_normalized)
-
-    joined_simplified_report =  joined_normalized.loc[:, keep_cols ].copy()
+    joined_normalized = joined_normalized.loc[:, keep_cols].copy()
+    try:
+        joined_normalized = LFC(joined_normalized)
+        joined_normalized = joined_normalized.sort_values(['Percent Total Reads','LFC'],ascending=False)
+        joined_simplified_report = joined_normalized.loc[joined_normalized['LFC'] > -3,:].copy()
+    except:
+        joined_normalized = joined_normalized.sort_values('Percent Total Reads',ascending=False)
+        joined_simplified_report = joined_normalized
     return joined_normalized, joined_simplified_report
 
-# def drop_large_controls(df,read_threshold):
-#     df2 = df.copy()
-#     df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'] - (df2['Control_Read_Count'] * 2)
-#     df2 = df2.loc[df2['Nuclease_Read_Count']>=read_threshold,:]
-#     df2['Nuclease_Read_Count'] = df2['Nuclease_Read_Count'].round(0).astype('int')
-#
-#     return df2
 
-
-
-def normalize(joined,qcfiles,normalization_method,read_threshold):
+def normalize(joined,pklfiles,normalization_method,read_threshold):
     count_dict = joined.loc[:,joined.columns.str.startswith('Nuclease_Read_Count')].to_dict('list')
     ## check if at least 5% of the sites are matching. if not then skip normalization:
     pt = 1-sum([x.count(0) for x in count_dict.values()])/len(list(count_dict.values())[0])
 
+    scaling_factors = {}
+    scaling_factors =scaling_factors.fromkeys(count_dict,1.0)
+
+    depths = get_read_depth(pklfiles)
+
     if pt < 0.05:
-        norm_count_dict = count_dict
         logger.info(f'Not enough overlapping sites to normalize {count_dict.keys()}')
+        logger.info(f'Min of 5% required overlap sites to normalize')
+        norm_count_dict = count_dict
+        try:
+            dont_keep, scaling_factors = rpm(count_dict, depths[0])
+            logger.info(f'Normalized by RPM instead.')
+        except:
+            logger.info(f'No normalization method used.')
+
     elif normalization_method == "median":
-        norm_count_dict = median_normalization(count_dict)
+        norm_count_dict, scaling_factors= median_normalization(count_dict)
     elif normalization_method == "rpm":
-        depths =get_read_depth(qcfiles)
-        norm_count_dict =rpm(count_dict,depths)
+        depths = get_read_depth(pklfiles)
+        norm_count_dict, scaling_factors = rpm(count_dict, depths[0])
     else:
         norm_count_dict = count_dict
+
     for k,v in norm_count_dict.items():
         joined.loc[:, k] = v
-    joined_normalized, simplified_report = clean_normalized(joined,read_threshold)
+
+    ## try to normalize Noise and Edited cols
+    joined = scale_control_counts(joined,norm_count_dict,depths)
+    try:
+        joined = scale_all_counts(joined,scaling_factors,depths)
+    except:
+        pass
+    joined_normalized, simplified_report = clean_normalized(joined,read_threshold,)
 
     return joined_normalized,simplified_report
 
@@ -381,7 +451,7 @@ def make_offtarget_dict(joined_normalized,subset):
     offtargets = sorted(offtargets, key=lambda x: x['reads'], reverse=True)
     return offtargets, target_seq, total_seq
 
-def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normalization_method,read_threshold,PAM):
+def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normalization_method,read_threshold,PAM):
     '''
     joined and normalizes replicates as indicated in manifest
     '''
@@ -395,7 +465,6 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
         sample = replicates['sample_name'][i]
         df = pd.read_csv(infile)
         df = parse_df(df,sample)
-        #df = drop_large_controls(df,read_threshold)
 
         if first_file:
             joined = df
@@ -407,7 +476,7 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
             previous_suffix = suffix
 
 
-    joined_normalized, simplified_report = normalize(joined,qcfiles,normalization_method,read_threshold)
+    joined_normalized, simplified_report = normalize(joined,pklfiles,normalization_method,read_threshold)
     joined_normalized.to_csv(processed_outfile, index = False)
     simplified_report.to_csv(simplified_report_outfile, index = False)
 
@@ -415,7 +484,7 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
     swarm_plot(joined_normalized, rep_group_name, swarm_plot_out)
 
     for sample in replicates['sample_name']:
-        offtargets, target_seq, total_seq = make_offtarget_dict(joined_normalized,subset='Nuclease_Read_Count.' + sample)
+        offtargets, target_seq, total_seq = make_offtarget_dict(simplified_report,subset='Nuclease_Read_Count.' + sample)
         alignment_plot = outfolder +"/visualization/"+ sample.replace(" ", "_") + "_postprocess_alignment_plot.svg"
         draw_plot(target_seq, offtargets, total_seq, outfile=alignment_plot, title=sample, PAM=PAM)
 
@@ -423,8 +492,8 @@ def process_results(rep_group_name,replicates,infiles,qcfiles,outfolder, normali
         sample_1= replicates['sample_name'][i]  #'Nuclease_Read_Count.' + sample
         for j in range(1,len(replicates['sample_name'])):
             sample_2 = replicates['sample_name'][j]
-            x1, x2 = list(joined_normalized[f'Nuclease_Read_Count.{sample_1}']), list(
-                joined_normalized[f'Nuclease_Read_Count.{sample_2}'])
+            x1, x2 = list(simplified_report[f'Nuclease_Read_Count.{sample_1}']), list(
+                simplified_report[f'Nuclease_Read_Count.{sample_2}'])
             scatter_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
             venn_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_venn.png"
 
