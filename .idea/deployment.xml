@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="thudson@igi.biotite.berkeley.edu:22 password" remoteFilesAllowedToDisappearOnAutoupload="false" showEqualInSync="true">
+  <component name="PublishConfigData" autoUpload="Always" serverName="thudson@igi.biotite.berkeley.edu:22 password (6)" remoteFilesAllowedToDisappearOnAutoupload="false" showEqualInSync="true" showNewOnTargetInSync="false">
     <serverData>
       <paths name="thudson@igi.biotite.berkeley.edu:22 password">
         <serverdata>
           <mappings>
-            <mapping deploy="/projects/CHANGEseq" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/projects/IGU_CHANGEseq" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="thudson@igi.biotite.berkeley.edu:22 password (7)">
+      <paths name="thudson@igi.biotite.berkeley.edu:22 password (6)">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/thudson/projects/CHANGEseq" local="$PROJECT_DIR$" />
+            <mapping deploy="projects/IGU_CHANGEseq" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>

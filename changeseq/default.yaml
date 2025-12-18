@@ -1,5 +1,5 @@
-annotate_path: /path/to/IGU_CHANGEseq/changeseq/data/ncbiRefSeq.bed.gz
-reference_genome:  /path/to/hg38.fa
+annotate_path: /home/thudson/projects/IGU_CHANGEseq/changeseq/data/ncbiRefSeq.bed.gz
+reference_genome:  /groups/clinical/projects/clinical_shared_data/hg38/hg38.fa
 changeseq_adapter: CTGTCTCTTATACACATCTACGTAGATGTGTATAAGAGACAG
 cutadapt: cutadapt
 njobs: 6
