@@ -67,7 +67,6 @@ class CircleSeq:
             # initialize some default input file names for annotation files
             for sample in self.parameters['samples']:
                 self.annotation_file[sample] = f"{self.output_dir[ 'raw_results/tables']}/{sample}_annotated_results.csv"
-
         except Exception as e:
             logger.error('Incorrect or malformed manifest file. Please ensure your manifest contains all required fields.')
             sys.exit()
@@ -150,7 +149,6 @@ class CircleSeq:
         if self.parameters['merged_analysis']:
             logger.info('Merging reads...')
             try:
-                self.merged = {}
                 for sample in self.parameters['samples']:
                     sample_merge_path = os.path.join(self.parameters["analysis_folder"], 'fastq', sample + '_merged.fastq.gz')
                     control_sample_merge_path = os.path.join(self.parameters["analysis_folder"], 'fastq', 'control_' + sample + '_merged.fastq.gz')
@@ -166,15 +164,36 @@ class CircleSeq:
                                      self.parameters['samples'][sample]['controlread2'],
                                    control_sample_merge_path)
 
-                    sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '.sam')
-                    control_sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', 'control_' + sample + '.sam')
+            except Exception as e:
+                logger.error('Error merging reads...')
+                logger.error(traceback.format_exc())
+                quit()
 
-                    alignReads(self.parameters['bwa'],
-                               self.parameters['reference_genome'],
-                               sample_merge_path,
-                               '',
-                               sample_alignment_path,
-                               self.be_flag)
+            try:
+                self.aligned = {}
+                self.aligned_sorted = {}
+                for sample in self.parameters['samples']:
+
+                    sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '.sam')
+                    control_sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned','control_' + sample + '.sam')
+
+                    if self.parameters['merged_analysis']:
+                        read1 = os.path.join(self.parameters["analysis_folder"], 'fastq', sample + '_merged.fastq.gz')
+                        read2 = ""
+                        control_read1 = os.path.join(self.parameters["analysis_folder"], 'fastq', 'control_' + sample + '_merged.fastq.gz')
+                        control_read2 = ""
+                    else:
+                        read1 =  self.parameters['samples'][sample]["read1"]
+                        read2 = self.parameters['samples'][sample]["read2"]
+                        control_read1 = self.parameters['samples'][sample]['controlread1']
+                        control_read2 =self.parameters['samples'][sample]['controlread2']
+
+                    alignReads(sample_name = sample,
+                               BWA_path=self.parameters['bwa'],
+                               HG19_path=self.parameters['reference_genome'],
+                               read1 = read1,
+                               read2 = read2,
+                               outfile = sample_alignment_path)
 
                     for ext in [".bam","_sorted.bam", "_sorted.bam.bai"]:
                         run_control_flag = check_control_exists(sample=sample,
@@ -184,50 +203,18 @@ class CircleSeq:
                                                                     ".sam", ext))
                         if run_control_flag:
 
-                            alignReads(self.parameters['bwa'],
-                                       self.parameters['reference_genome'],
-                                       control_sample_merge_path,
-                                       '',
-                                       control_sample_alignment_path,
-                                       self.be_flag)
-                            break
-
-                    self.merged[sample] = sample_alignment_path
-                logger.info('Finished merging and aligning reads.')
-
-            except Exception as e:
-                logger.error('Error aligning')
-                logger.error(traceback.format_exc())
-                quit()
-        else:
-            try:
-                self.aligned = {}
-                self.aligned_sorted = {}
-                for sample in self.parameters['samples']:
-                    sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '.sam')
-                    control_sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', 'control_' + sample + '.sam')
-                    alignReads(sample,self.parameters['bwa'],
-                               self.parameters['reference_genome'],
-                               self.parameters['samples'][sample]["read1"],
-                               self.parameters['samples'][sample]["read2"],
-                               sample_alignment_path,self.be_flag)
-
-                    for ext in ["_sorted.bam","_sorted.bam.bai"]:
-                        run_control_flag = check_control_exists(sample=sample,
-                                                                representative_control=self.representative_controls[sample],
-                                                                control_outfile=control_sample_alignment_path.replace(".sam",ext))
-                        if run_control_flag:
-                            alignReads('control_' + sample,self.parameters['bwa'],
-                                       self.parameters['reference_genome'],
-                                       self.parameters['samples'][sample]['controlread1'],
-                                       self.parameters['samples'][sample]['controlread2'],
-                                       control_sample_alignment_path,self.be_flag)
+                            alignReads(sample_name='control_' + sample,
+                                       BWA_path=self.parameters['bwa'],
+                                       HG19_path=self.parameters['reference_genome'],
+                                       read1=control_read1,
+                                       read2=control_read2,
+                                       outfile=sample_alignment_path)
                             break
                     self.aligned[sample] = sample_alignment_path
                     self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_sorted.bam')
-                    logger.info('Finished aligning reads to genome.')
                     self.findCleavageSites_input_bam[sample] = [sample_alignment_path.replace(".sam","_sorted.bam"),
                                                                 control_sample_alignment_path.replace(".sam","_sorted.bam")]
+                    logger.info('Finished aligning reads.')
 
             except Exception as e:
                 logger.error('Error aligning')
@@ -241,11 +228,25 @@ class CircleSeq:
             try:
                 for sample in self.parameters['samples']:
                     bam, control_bam = self.findCleavageSites_input_bam[sample]
+                    identified_sites_file = os.path.join(self.parameters["analysis_folder"], 'raw_results/tables',
+                                                         sample)
 
-                    findCleavageSites_BE.compare(bam=bam,control=control_bam,label=sample,
-                                                 output_dir=self.parameters["analysis_folder"] + 'raw_results/tables',
-                                                 targetsite=self.parameters['samples'][sample]['target'],
-                                                 **self.parameters)
+                    findCleavageSites_BE.compare(ref = self.parameters['reference_genome'],
+                                                 bam= bam,
+                                                 control=control_bam,
+                                                 targetsite = self.parameters['samples'][sample]['target'],
+                                                 BEsearch_radius = self.parameters['BEsearch_radius'],
+                                                 window_size = self.parameters['window_size'],
+                                                 mapq_threshold = self.parameters['mapq_threshold'],
+
+                                                 mismatch_threshold =self.parameters['mismatch_threshold'],
+                                                 edist_threshold=self.parameters['edist_threshold'],
+                                                 bulge_threshold=self.parameters['bulge_threshold'],
+                                                 BEmodel_min_overlap = self.parameters['BEmodel_min_overlap'],
+                                                 BEmodel_max_overlap = self.parameters['BEmodel_max_overlap'],
+                                                 name =sample,
+                                                 out =identified_sites_file,
+                                                 read_count_cutoff=self.parameters['read_threshold'])
 
 
             except Exception as e:
@@ -260,16 +261,18 @@ class CircleSeq:
 
                     identified_sites_file = os.path.join(self.parameters["analysis_folder"],  'raw_results/tables', sample)
 
-                    findCleavageSites.compare(self.parameters['reference_genome'], bam, control_bam,
-                                              self.parameters['samples'][sample]['target'],
-                                              self.parameters['search_radius'],
-                                              self.parameters['window_size'],
-                                              self.parameters['mapq_threshold'],
-                                              self.parameters['gap_threshold'],
-                                              self.parameters['start_threshold'],
-                                              self.parameters['mismatch_threshold'],
-                                              sample, self.parameters['samples'][sample]['description'],
-                                              identified_sites_file, False,
+                    findCleavageSites.compare(ref = self.parameters['reference_genome'],bam= bam, control=control_bam,
+                                              targetsite = self.parameters['samples'][sample]['target'],
+                                              search_radius = self.parameters['search_radius'],
+                                              windowsize = self.parameters['window_size'],
+                                              mapq_threshold = self.parameters['mapq_threshold'],
+                                              gap_threshold = self.parameters['gap_threshold'],
+                                              start_threshold = self.parameters['start_threshold'],
+                                              mismatch_threshold =self.parameters['mismatch_threshold'],
+                                              edist_threshold=self.parameters['edist_threshold'],
+                                              bulge_threshold=self.parameters['bulge_threshold'],
+                                              name =sample,
+                                              out =identified_sites_file,
                                               merged=self.parameters['merged_analysis'],
                                               read_count_cutoff=self.parameters['read_threshold'],
                                               read_length=self.parameters['read_length'])
@@ -340,7 +343,7 @@ class CircleSeq:
                 coverage_command = f'sh {script_path} {sample} {"control_" + sample} {self.parameters["analysis_folder"]}'
 
                 logger.info(coverage_command)
-                #subprocess.check_call(coverage_command, shell=True)
+                subprocess.check_call(coverage_command, shell=True)
                 logger.info('OT Coverage for {0} completed.'.format(sample))
         except Exception as e:
             logger.error('Error with alignment coverage QC ')

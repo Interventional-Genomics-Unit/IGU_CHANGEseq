@@ -349,14 +349,10 @@ def write_merged_bed(res_data,bed_entries):
        'COSMICS.tier']] = res_data[['HPA.disease_involvement' , 'COSMICS.cancer_role',
        'COSMICS.tier']].fillna('nan')
     res_data['COSMICS.tier']=res_data['COSMICS.tier'].astype('str').replace('nan',0).astype('float')
-
-
     return res_data
 
 ##annotation files
-def annotate(identify_file, annotate_path):
-    impact_bed = '/groups/clinical/projects/taylorh/CRISPRimpact_database/impact_annotations.bed'
-
+def annotate(identify_file, annotate_path,impact_bed = '/groups/clinical/projects/taylorh/CRISPRimpact_database/impact_annotations.bed'):
     outfile_name = identify_file.strip('.txt') + '_annotated.csv'
     res_data = pd.read_csv(identify_file, sep='\t')
     coords = list(res_data['Genomic Coordinate'])
@@ -389,6 +385,4 @@ def annotate(identify_file, annotate_path):
     res_data.loc[:,'DNA_Bulge'] = res_data['DNA_Bulge'].fillna(0)
     res_data = res_data.sort_values('Nuclease_Read_Count',ascending = False)
     res_data = res_data.drop_duplicates(subset=['Chr','Start','End'])
-
-
     res_data.to_csv(outfile_name, index = False)

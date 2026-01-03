@@ -3,6 +3,7 @@ import svgwrite
 import os
 import logging
 import argparse
+import pandas as pd
 from Bio import SeqUtils
 
 
@@ -16,9 +17,6 @@ v_spacing = 3
 
 global colors
 colors = ['#EC5121', '#96C04B', '#FFAC0F', '#7ACBC8', '#97FFFF']
-#colors = {'G': '#00CDCD', 'A': '#3A5FCD', 'T': '#8EE5EE', 'C': '#B0E0E6', 'N': '#97FFFF',
-#          'R': '#B3B3B3', '-': '#B3B3B3'}
-
 
 def levenshtein_two_matrix_rows(str1, str2, PAM):
     # Get the lengths of the input strings
@@ -35,70 +33,45 @@ def levenshtein_two_matrix_rows(str1, str2, PAM):
 def parseSitesFile(infile):
     offtargets = []
     total_seq = 0
-    with open(infile, 'r') as f:
-        for line in f:
-            line = line.rstrip('\n')
-            if '\t' in line:
-                line_items = line.split('\t')
-            else:
-                line_items = line.split(',')
 
-            if 'Gene_Name' in line_items:
-               igene = line_items.index('Gene_Name')+1
+    if infile.endswith(".txt"):
+        df = pd.read_csv(infile, sep='\t')
+    else:
+        df = pd.read_csv(infile)
+    for i,row in df.iterrows():
+        bulge_flag = True
 
-            else:
-                offtarget_reads = line_items[5]
-                no_bulge_offtarget_sequence = line_items[7].upper()  # Site_Sequence
-                bulge_offtarget_sequence = line_items[8].upper()
-                target_seq = line_items[16]
-                realigned_target_seq = line_items[17]
-                coord = line_items[3].split("-")[0]
-                num_mismatch = int(line_items[9])
+        offtarget_reads = int(row['Nuclease_Read_Count'])
+        no_bulge_offtarget_sequence = row['Site_Sequence'].upper()  # Site_Sequence
+        target_seq = row['Target_Sequence'].replace("-","")
+        realigned_target_seq = row['Target_site']
+        coord = row['Genomic Coordinate']
+        num_mismatch = str(row['Site_Substitution_Number'])
+        dist = int(row['RNA_Bulge']) + int(row['RNA_Bulge']) + int(row['Site_Substitution_Number'])
 
-                if "intergenic" not in line_items[igene+1]:
-                    annot = line_items[igene] + "," + line_items[igene+1].replace("non-coding RNA","ncRNA") # gene name and feature
-                else:
-                    annot = ""
+        if "intergenic" not in row['Feature']:
+            annot =  row['Gene_Name'] + "," + row.Feature.replace("non-coding RNA","ncRNA") # gene name and feature
+        else:
+            annot = ""
 
+        total_seq += 1
 
-                if no_bulge_offtarget_sequence != '' or bulge_offtarget_sequence != '':
-                    #print(no_bulge_offtarget_sequence,bulge_offtarget_sequence)
-                    if no_bulge_offtarget_sequence:
-                        total_seq += 1
-                    if bulge_offtarget_sequence:
-                        total_seq += 1
-                        #num_mismatch = 0
-                        #length = len(realigned_target_seq.strip())
-                        #for l in range(length):
-                        #    k = bulge_offtarget_sequence.strip()[l]
-                        #    j = realigned_target_seq.strip()[l]
-                        #    if k != '-' and j != '-' and k !=j:
-                        #        num_mismatch += 1
+        if row['RNA_Bulge'] + row['RNA_Bulge'] == 0:
+            bulge_flag = False
 
-                    offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
-                                       'bulged_seq': bulge_offtarget_sequence.strip(),
-                                       'reads': int(offtarget_reads.strip()),
-                                       'coord': str(coord),
-                                       'annot': str(annot),
-                                       'num_mismatch': str(num_mismatch),
-                                       'target_seq': target_seq.strip(),
-                                       'realigned_target_seq': realigned_target_seq.strip()
-                                       })
+        offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
+                           'reads': offtarget_reads,
+                           'dist' : dist,
+                           'coord': str(coord),
+                           'annot': str(annot),
+                           'num_mismatch': num_mismatch,
+                           'target_seq': target_seq.strip(),
+                           'realigned_target_seq': realigned_target_seq.strip(),
+                           'bulge_flag': bulge_flag})
     offtargets = sorted(offtargets, key=lambda x: x['reads'], reverse=True)
 
     return offtargets, target_seq, total_seq
 
-# 3/6/2020 Yichao
-def check_mismatch(a,b):
-    from Bio.Data import IUPACData
-    dna_dict = IUPACData.ambiguous_dna_values
-    set_a = dna_dict[a.upper()]
-    set_b = dna_dict[b.upper()]
-    overlap = list(set(list(set_a)).intersection(list(set_b)))
-    if len(overlap) == 0:
-        return True
-    else:
-        return False
 
 def find_PAM(seq,PAM):
     try:
@@ -116,6 +89,7 @@ def find_PAM(seq,PAM):
                 logger.info("PAM: %s not found in %s. Set PAM index to 20"%(PAM,seq))
                 PAM_index=20
     return PAM_index
+
 def draw_plot(target_seq,offtargets,total_seq,outfile,title,PAM):
     colors = {'G': '#EC5121', 'A': '#96C04B', 'T': '#FFAC0F', 'C': '#7ACBC8', 'N': '#97FFFF',
               'R': '#B3B3B3', '-': '#B3B3B3'}
@@ -189,16 +163,16 @@ def draw_plot(target_seq,offtargets,total_seq,outfile,title,PAM):
     line_number = 0  # keep track of plotted sequences
     for j, seq in enumerate(offtargets):
         realigned_target_seq = offtargets[j]['realigned_target_seq']
-        no_bulge_offtarget_sequence = offtargets[j]['seq']
-        bulge_offtarget_sequence = offtargets[j]['bulged_seq']
-        b_dist = ''
+        otseq = offtargets[j]['seq']
+        bulge_flag = offtargets[j]['bulge_flag']
+        dist = offtargets[j]['dist']
 
-        if no_bulge_offtarget_sequence != '': ## Theres at least an alignment with nok bulges
-            b_dist = levenshtein_two_matrix_rows(no_bulge_offtarget_sequence, target_seq,PAM)
+        if bulge_flag == False:
+            b_dist = levenshtein_two_matrix_rows(otseq, target_seq,PAM)
             k = 0
             line_number += 1
             y = y_offset + line_number * box_size
-            for i, (c, r) in enumerate(zip(no_bulge_offtarget_sequence, target_seq)):
+            for i, (c, r) in enumerate(zip(otseq, target_seq)):
                 x = x_offset + k * box_size
                 if r == '-':
                     if 0 < k < len(target_seq):
@@ -220,12 +194,11 @@ def draw_plot(target_seq,offtargets,total_seq,outfile,title,PAM):
                     dwg.add(dwg.text(c, insert=(x + 3, 2 * box_size + y - 3), fill='black',
                                      style="font-size:15px; font-family:Courier"))
                     k += 1
-        if bulge_offtarget_sequence != '': #theres a bulge seq present
+        if bulge_flag: #theres a bulge seq present
             k = 0
             line_number += 1
             y = y_offset + line_number * box_size
-            b_dist = levenshtein_two_matrix_rows(bulge_offtarget_sequence, realigned_target_seq,PAM)
-            for i, (c, r) in enumerate(zip(bulge_offtarget_sequence, realigned_target_seq)):
+            for i, (c, r) in enumerate(zip(otseq, realigned_target_seq)):
                 x = x_offset + k * box_size
                 if r == '-':
                     if 0 < k < len(realigned_target_seq):
@@ -248,55 +221,54 @@ def draw_plot(target_seq,offtargets,total_seq,outfile,title,PAM):
                                      style="font-size:15px; font-family:Courier"))
                     k += 1
 
-        if no_bulge_offtarget_sequence == '' or bulge_offtarget_sequence == '': # there are not two different alignments
-            reads_text = dwg.text(str(seq['reads']), insert=(
-                box_size * (len(target_seq) + 1) + 20, y_offset + box_size * (line_number + 2) - 2),
-                                  fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(reads_text)
-            mismatch_text = dwg.text(b_dist, insert=(
-                box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) - 2),
-                                     fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(mismatch_text)
+        reads_text = dwg.text(str(seq['reads']), insert=(
+            box_size * (len(target_seq) + 1) + 20, y_offset + box_size * (line_number + 2) - 2),
+                              fill='black', style="font-size:15px; font-family:Courier")
+        dwg.add(reads_text)
+        mismatch_text = dwg.text(dist, insert=(
+            box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) - 2),
+                                 fill='black', style="font-size:15px; font-family:Courier")
+        dwg.add(mismatch_text)
 
-            annot_text = dwg.text(seq['annot'], insert=(
-                box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
-                                  fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(annot_text)
+        annot_text = dwg.text(seq['annot'], insert=(
+            box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 2) - 2),
+                              fill='black', style="font-size:15px; font-family:Courier")
+        dwg.add(annot_text)
 
-            coord_text = dwg.text(seq['coord'], insert=(
-                box_size * (len(target_seq) + 1) + 390, y_offset + box_size * (line_number + 2) - 2),
-                                  fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(coord_text)
+        coord_text = dwg.text(seq['coord'], insert=(
+            box_size * (len(target_seq) + 1) + 390, y_offset + box_size * (line_number + 2) - 2),
+                              fill='black', style="font-size:15px; font-family:Courier")
+        dwg.add(coord_text)
 
-        else:
-            reads_text = dwg.text(str(seq['reads']), insert=(
-            box_size * (len(target_seq) + 1) + 20, y_offset + box_size * (line_number + 1) + 5),
-                                  fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(reads_text)
-
-            mismatch_text = dwg.text(b_dist, insert=(
-                box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) - 2),
-                                     fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(mismatch_text)
-            annot_text = dwg.text(seq['annot'], insert=(
-                box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
-                                  fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(annot_text)
-            mismatch_text = dwg.text(seq['coord'], insert=(
-                box_size * (len(target_seq) + 1) + 380, y_offset + box_size * (line_number + 1) + 5),
-                                     fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(mismatch_text)
-
-            dist_text = dwg.text(b_dist, insert=(
-                box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 1) - 2),
-                                     fill='black', style="font-size:15px; font-family:Courier")
-            dwg.add(dist_text)
-            ## TH added coords
-
-            reads_text02 = dwg.text(u"\u007D", insert=(
-            box_size * (len(target_seq) + 1) + 7, y_offset + box_size * (line_number + 1) + 5),
-                                    fill='black', style="font-size:23px; font-family:Courier")
-            dwg.add(reads_text02)
+        # else:
+        #     reads_text = dwg.text(str(seq['reads']), insert=(
+        #     box_size * (len(target_seq) + 1) + 20, y_offset + box_size * (line_number + 1) + 5),
+        #                           fill='black', style="font-size:15px; font-family:Courier")
+        #     dwg.add(reads_text)
+        #
+        #     mismatch_text = dwg.text(dist, insert=(
+        #         box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 2) - 2),
+        #                              fill='black', style="font-size:15px; font-family:Courier")
+        #     dwg.add(mismatch_text)
+        #     annot_text = dwg.text(seq['annot'], insert=(
+        #         box_size * (len(target_seq) + 1) + 200, y_offset + box_size * (line_number + 1) + 5),
+        #                           fill='black', style="font-size:15px; font-family:Courier")
+        #     dwg.add(annot_text)
+        #     mismatch_text = dwg.text(seq['coord'], insert=(
+        #         box_size * (len(target_seq) + 1) + 380, y_offset + box_size * (line_number + 1) + 5),
+        #                              fill='black', style="font-size:15px; font-family:Courier")
+        #     dwg.add(mismatch_text)
+        #
+        #     dist_text = dwg.text(dist, insert=(
+        #         box_size * (len(target_seq) + 1) + 130, y_offset + box_size * (line_number + 1) - 2),
+        #                              fill='black', style="font-size:15px; font-family:Courier")
+        #     dwg.add(dist_text)
+        #     ## TH added coords
+        #
+        #     reads_text02 = dwg.text(u"\u007D", insert=(
+        #     box_size * (len(target_seq) + 1) + 7, y_offset + box_size * (line_number + 1) + 5),
+        #                             fill='black', style="font-size:23px; font-family:Courier")
+        #     dwg.add(reads_text02)
     dwg.save()
 
 def visualizeOfftargets(infile, outfile, title, PAM):

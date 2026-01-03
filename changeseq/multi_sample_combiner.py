@@ -78,13 +78,13 @@ def choose_cols(df):
     keep_cols = ['Genomic Coordinate']
     keep_cols += [x for x in df.columns if 'Nuclease_Read_Count' in x or 'Control_Read_Count' in x]
 
-    keep_cols += ['Site_Sequence','Aligned_Site_Sequence','Site_Substitution_Number',
+    keep_cols += ['LFC','Site_Sequence','Aligned_Site_Sequence','Site_Substitution_Number',
                   'Target_Sequence', 'Aligned_Target_Sequence',
                   'DNA_Bulge', 'RNA_Bulge','Distance','Number of Replicates Sites found','Percent Total Reads',
                   'Gene_Name', 'Feature', 'Cell', 'MappingPositionStart',
                   'MappingPositionEnd', 'WindowSequence']
 
-    keep_cols += [x for x in df.columns if 'Edited' in x or 'Noise' in x]
+    keep_cols += [x for x in df.columns if 'Converted' in x or 'Noise' in x]
 
     if 'gnomAD.constraint' in df.columns:
         keep_cols += ['gnomAD.constraint', 'HPA.disease_involvement', 'COSMICS.cancer_role',
@@ -113,6 +113,11 @@ def parse_df(df,sample):
     x = (df.loc[:, 'Nuclease_Read_Count'] / df.loc[:, 'Nuclease_Read_Count'].sum()).round(3)
     df.insert(i + 3,'Percent Total Reads',x.round(5) *100)
 
+
+    i = list(df.columns).index('Site_Sequence')
+    lfc = LFC(df)
+    df.insert(i, 'LFC', lfc)
+
     keep_cols = choose_cols(df)
     df = df.loc[:,keep_cols]
 
@@ -132,14 +137,14 @@ def join_replicates(sample1_df, sample2_df, suffixes):
     for col in df.columns:
         if "Read_Count" in col:
             df.loc[:,col] = df[col].fillna(0)
-        if "Edited" in col:
+        if "Converted" in col:
             df.loc[:,col] = df[col].fillna(0)
         if "Noise" in col:
             df.loc[:,col] = df[col].fillna(0)
 
 
     for col in keep_cols[keep_cols.index( 'Site_Sequence'):]:
-        if "Edited" not in col:
+        if "Converted" not in col:
             if "Noise" not in col:
                 df.loc[:,col] = df[f'{col}{suffixes[0]}'].fillna(df[f'{col}{suffixes[1]}'])
                 df = df.drop(columns=[f'{col}{suffixes[0]}', f'{col}{suffixes[1]}'])
@@ -296,6 +301,7 @@ def vennplot_replicates(x1,x2,sample1,sample2,figout):
                                            np.array([0, -0.5]), xytext=(-60, -30), ha='center',
                  textcoords='offset points')
     plt.savefig(figout, bbox_inches='tight')
+    plt.close(figout)
     #plt.show()
     return ja
 
@@ -306,9 +312,9 @@ def scale_all_counts(joined,scaling_factors,depths):
     for sample,sf in scaling_factors.items():
         ctl_sf = cntl_scaling_factors[i]
         rep = sample.split("Count.")[-1]
-        joined[f'Nuclease_Edited.{rep}'] = (joined[f'Nuclease_Edited.{rep}'] * sf).round(3)
+        joined[f'Nuclease_Base_Converted.{rep}'] = (joined[f'Nuclease_Base_Converted.{rep}'] * sf).round(3)
         joined[f'Nuclease_Noise.{rep}'] =(joined[f'Nuclease_Noise.{rep}'] * sf).round(3)
-        joined[f'Control_Edited.{rep}'] = (joined[f'Control_Edited.{rep}'] * ctl_sf).round(3)
+        joined[f'Control_Base_Converted.{rep}'] = (joined[f'Control_Base_Converted.{rep}'] * ctl_sf).round(3)
         joined[f'Control_Noise.{rep}'] = (joined[f'Control_Noise.{rep}'] * ctl_sf).round(3)
         i+=1
     return joined
@@ -324,21 +330,16 @@ def scale_control_counts(joined,norm_count_dict,depths):
          i+=1
     return  joined
 
-def LFC(joined_normalized):
+def LFC(df):
     '''
     LFC between Nuclease reads only
     Not the best but something for now
     '''
     alpha = 1
-    i = list(joined_normalized.columns).index('Site_Sequence')
-
-    identified = joined_normalized.loc[:,joined_normalized.columns.str.startswith("Nuclease_Read_Count")].sum(1) + alpha
-    noise = joined_normalized.loc[:,joined_normalized.columns.str.startswith("Nuclease_Noise")].sum(1) +alpha
+    identified = df.loc[:,df.columns.str.startswith("Nuclease_Read_Count")].sum(1) + alpha
+    noise = df.loc[:,df.columns.str.startswith("Nuclease_Noise")].sum(1) +alpha
     lfc = np.log2(identified / noise).round(4)
-    joined_normalized.insert(i , 'LFC', lfc)
-
-
-    return joined_normalized
+    return lfc
 
 def clean_normalized(joined_normalized,read_threshold):
     read_columns = joined_normalized.columns.str.startswith('Nuclease_Read_Count')
@@ -352,17 +353,15 @@ def clean_normalized(joined_normalized,read_threshold):
     joined_normalized.loc[:,'Number of Replicates Sites found'] = (joined_normalized.loc[:, read_columns] > 0).sum(1)
     joined_normalized.loc[:,'Percent Total Reads'] =joined_normalized.loc[:, read_columns].sum(1) / joined_normalized.loc[:, read_columns].sum(1).sum()
     joined_normalized.loc[:, 'Percent Total Reads'] =  joined_normalized['Percent Total Reads'].round(5) *100
-
-    # make a simplified version
+    joined_normalized.loc[:, 'LFC'] = LFC(joined_normalized)
     keep_cols = choose_cols(joined_normalized)
     joined_normalized = joined_normalized.loc[:, keep_cols].copy()
-    try:
-        joined_normalized = LFC(joined_normalized)
-        joined_normalized = joined_normalized.sort_values(['Percent Total Reads','LFC'],ascending=False)
-        joined_simplified_report = joined_normalized.loc[joined_normalized['LFC'] > -3,:].copy()
-    except:
-        joined_normalized = joined_normalized.sort_values('Percent Total Reads',ascending=False)
-        joined_simplified_report = joined_normalized
+    joined_normalized['LFC FLAG'] = ""
+    joined_normalized.loc[joined_normalized['LFC'] < -3, 'LFC FLAG'] = 'LFC < -3'
+    # make a simplified version
+
+    joined_normalized = joined_normalized.sort_values(['Percent Total Reads','LFC'],ascending=False)
+    joined_simplified_report = joined_normalized
     return joined_normalized, joined_simplified_report
 
 
@@ -415,16 +414,13 @@ def make_offtarget_dict(joined_normalized,subset):
 
     for i,row in sample_df.iterrows():
         offtarget_reads = row[subset]
+        bulge_flag = True
         annot = ""
+        target_seq = row['Target_Sequence'].replace("-", "")
+        realigned_target_seq = row['Target_site']
+        no_bulge_offtarget_sequence = row['Site_Sequence'].upper()
         if int(row['RNA_Bulge']) + int(row['DNA_Bulge']) == 0:
-            no_bulge_offtarget_sequence = row['Site_Sequence']
-            bulge_offtarget_sequence = ""
-            realigned_target_seq = row['Aligned_Target_Sequence']
-
-        else:
-            no_bulge_offtarget_sequence = ""
-            realigned_target_seq =  row['Aligned_Target_Sequence']
-            bulge_offtarget_sequence = row['Aligned_Site_Sequence']
+            bulge_flag = False
 
         coord = row['Genomic Coordinate']
 
@@ -435,19 +431,17 @@ def make_offtarget_dict(joined_normalized,subset):
         except:
             pass
 
-        if no_bulge_offtarget_sequence != '' or bulge_offtarget_sequence != '':
-            if no_bulge_offtarget_sequence:
-                total_seq += 1
-            if bulge_offtarget_sequence:
-                total_seq += 1
-            offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
-                               'bulged_seq': bulge_offtarget_sequence.strip(),
-                               'reads': int(offtarget_reads),
-                               'target_seq': target_seq.strip(),
-                               'coord': coord,
-                               'annot': str(annot),
-                               'realigned_target_seq': realigned_target_seq.strip()
-                               })
+        total_seq += 1
+        offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
+                           'reads': offtarget_reads,
+                           'dist': int(row['RNA_Bulge']) + int(row['DNA_Bulge']) + int(row['Mismatches']),
+                           'coord': str(coord),
+                           'annot': str(annot),
+                           'num_mismatch': str(row['Mismatches']),
+                           'target_seq': target_seq.strip(),
+                           'realigned_target_seq': realigned_target_seq.strip(),
+                           'bulge_flag': bulge_flag})
+
     offtargets = sorted(offtargets, key=lambda x: x['reads'], reverse=True)
     return offtargets, target_seq, total_seq
 
@@ -481,7 +475,8 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
     simplified_report.to_csv(simplified_report_outfile, index = False)
 
     ## plotting
-    swarm_plot(joined_normalized, rep_group_name, swarm_plot_out)
+    swarmplot_df = joined_normalized.loc[joined_normalized['LFC FLAG']=="", ].copy()
+    swarm_plot(swarmplot_df , rep_group_name, swarm_plot_out)
 
     for sample in replicates['sample_name']:
         offtargets, target_seq, total_seq = make_offtarget_dict(simplified_report,subset='Nuclease_Read_Count.' + sample)
