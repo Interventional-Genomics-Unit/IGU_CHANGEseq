@@ -6,8 +6,8 @@ Added Features:
 
 * All in one BE and Cas python updated to Python3
 * Search with unlimited bulge and edit distance thresholds
-* replicate combination
-* normalization of replicates - (median-of-ratios or rpm)
+* replicate combination and Log2FoldChange
+* normalization of replicates - (median-to-ratios "median" or total aligned reads per million "rpm")
 * simple .csv sample manifest
 * removal of TN5 ME adapters and illumina adapter (unmerged version only)
 * QC metrics of alignments and fastq circularization read composition
@@ -76,7 +76,7 @@ The manifest file has the following .csv file
 - `bwa`: The absolute path to the `bwa` executable
 - `samtools`: The absolute path to the `samtools` executable
 - `cutadapt`: The absolute path to the `cutadapt` executable
-- `merged_analysis`: Whether or not the paired read merging step should taking (highly recommend not using) default = False
+- `merged_analysis`: Whether or not the paired read merging step should taking (highly recommend **not** using) default = False
 - `read_threshold`: The minimum number of reads at a location for that location to be called as a site. We recommend leaving it to the default value of 4.
 - `window_size`: Size of the sliding window, we recommend leaving it to the default value of 30.
 - `mapq_threshold`: Minimum read mapping quality score. We recommend leaving it to the default value of 40.
@@ -88,7 +88,10 @@ The manifest file has the following .csv file
 - `read_length`: Fastq file read length, default is 151.
 - `PAM`: PAM sequence, default is NGG.
 - `search_radius`: in addition to the window size, how far away from the cut site to search for search
-- `normalize`: normalization method to use for replicates "none", "median" or "rpm", default=median
+- `normalize`: normalization method to use for replicates "rpm","median" or "none", default=rpm. 
+`rpm` uses total aligned reads to scale counts. `median` uses median-to-ratios, a method used in DESEQ2 for RNA-seq scaling. Note that `median` is the more accurate however, 
+it cannot be applied to control since the site identification counts are too low. 
+The pipeline applied rpm just to the control counts to apply some scale to these as well
 
 For BE analysis
 - `BEsearch_radius`: In addition to the window size, how far away from the overlap to search for search 
@@ -116,7 +119,8 @@ For BE analysis
 
 
 ## Pipeline Results
-When running the full pipeline, the results of each step are outputted to the `output_folder` in a separate folder for each step. The output folders and their respective contents are as follows:
+When running the full pipeline, the results of each step are outputted to the `output_folder` in a separate folder for each step. 
+The output folders and their respective contents are as follows:
 
 ```
 project_directory/
@@ -127,15 +131,35 @@ project_directory/
 │
 ├──preprocessed/                    # Cutadapt & fastp output for FASTQ trimming 
 │
-├── raw_output/                     # Pre-normalized raw read counts
-│   └── visualization/              # Alignment plots of raw read counts
+├── raw_results/                     # Pre-normalized raw read counts
+│   └── tables/                      # Raw read count tables as text and then annotated
+│   └── visualization/               # Alignment plots of raw read counts
 │
 ├── qc/
 │   ├── alignment_files/            # BAM stats and a subset of identified sites (great for IGV!)
 │   └── QC_reports/                 # Reports: % trimmed, % aligned, read counts, etc.
 │
-└── processed_output/               # Processed + normalized reads
-    ├── joined_tables/              # Detailed replicate-level summary tables
+└── post-process_results/               # Processed + normalized reads
+    ├── tables/                     # Detailed replicate-level summary tables
     └── visualizations/             # Swarm plots, scatter plots, alignment plots, etc.
 
 ```
+### post-process
+
+The process_results/tables/[sample]_joined_LFC.csv tables are the considered the final report. This table contains:
+
+* joined & normalized replicate read counts including noise counts and base converted reads if relevant
+* log2fold change (LFC) which is the log2 of nuclease identified site counts over noise reads counts. Noise read counts are mapped reads in the same interval that may or may not fit the full criteria (i.e. under mapq_threshold, not in correct orientation etc. )
+* percent of total reads
+* **important**: LFC FLAG This is a flag if the Nuclease edited sites below an indicated threshold. This means there are too many noise reads relative to identified site counts. You should take caution in these sites. LFC < -1 are excluded from post-process plots
+
+The post-process_results/tables/[sample]_joined_LFC_aggregated.csv tables are the final report 
+except the average of all replicate counts for a cleaner and simplified view table.
+
+all plots are made with normalized read counts
+
+### raw-results
+
+
+
+### raw-results

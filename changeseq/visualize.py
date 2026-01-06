@@ -42,9 +42,9 @@ def parseSitesFile(infile):
         bulge_flag = True
 
         offtarget_reads = int(row['Nuclease_Read_Count'])
-        no_bulge_offtarget_sequence = row['Site_Sequence'].upper()  # Site_Sequence
+        offtarget_sequence = row['Site_Sequence_Gaps_Allowed'].upper()  # Site_Sequence
         target_seq = row['Target_Sequence'].replace("-","")
-        realigned_target_seq = row['Target_site']
+        realigned_target_seq = row['Realigned_Target_Sequence']
         coord = row['Genomic Coordinate']
         num_mismatch = str(row['Site_Substitution_Number'])
         dist = int(row['RNA_Bulge']) + int(row['RNA_Bulge']) + int(row['Site_Substitution_Number'])
@@ -59,7 +59,7 @@ def parseSitesFile(infile):
         if row['RNA_Bulge'] + row['RNA_Bulge'] == 0:
             bulge_flag = False
 
-        offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
+        offtargets.append({'seq': offtarget_sequence,
                            'reads': offtarget_reads,
                            'dist' : dist,
                            'coord': str(coord),
@@ -168,7 +168,6 @@ def draw_plot(target_seq,offtargets,total_seq,outfile,title,PAM):
         dist = offtargets[j]['dist']
 
         if bulge_flag == False:
-            b_dist = levenshtein_two_matrix_rows(otseq, target_seq,PAM)
             k = 0
             line_number += 1
             y = y_offset + line_number * box_size

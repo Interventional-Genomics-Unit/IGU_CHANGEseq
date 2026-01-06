@@ -35,14 +35,14 @@ def check_file(file):
         return False
 
 def get_read_depth(pklfiles):
-    depths = [[],[]]
+    depths = {'control':[],'nuclease':[]}
 
     for file in pklfiles:
         if check_file(file):
             with open(file, 'rb') as f:
                 data = pickle.load(f)
-            depths[0].append(int(data['total nuclease count']))
-            depths[1].append(int(data['total control count']))
+            depths['nuclease'].append(int(data['total nuclease count']))
+            depths['control'].append(int(data['total control count']))
         else:
             logger.info(f'Total read depth for {file} could not be found for tpm normalization')
             logger.info('Running without normalizing')
@@ -78,6 +78,7 @@ def choose_cols(df):
     keep_cols = ['Genomic Coordinate']
     keep_cols += [x for x in df.columns if 'Nuclease_Read_Count' in x or 'Control_Read_Count' in x]
 
+
     keep_cols += ['LFC','Site_Sequence','Aligned_Site_Sequence','Site_Substitution_Number',
                   'Target_Sequence', 'Aligned_Target_Sequence',
                   'DNA_Bulge', 'RNA_Bulge','Distance','Number of Replicates Sites found','Percent Total Reads',
@@ -92,16 +93,26 @@ def choose_cols(df):
 
     return keep_cols
 
+def get_count_columns(df):
+    cols = []
+    for col in df.columns:
+        for i in ['_Read_Count',"Converted","Noise"]:
+            if i in col:
+                cols.append(col)
+                break
+    return cols
+
 
 
 def parse_df(df,sample):
     ## Filling in Aligned and ungapped sequence
+    #df = df.loc[df.Nuclease_Read_Count>=read_threshold, :].copy()
     df.loc[:,'Aligned_Site_Sequence']= df['Site_Sequence_Gaps_Allowed'].fillna(df['Site_Sequence'])
     df.loc[:,'Site_Sequence'] = df['Site_Sequence'].fillna(df['Site_Sequence_Gaps_Allowed'].astype('str').str.replace("-", ""))
-    df.loc[:, 'Aligned_Target_Sequence'] = df['Realigned_Target_Sequence'].astype('str').replace('none', np.nan)
-    df.loc[:,'Aligned_Target_Sequence'] = df.loc[:,'Aligned_Target_Sequence'].fillna(df['Target_Sequence'])
-    df.loc[:,'RNA_Bulge'] = df['RNA_Bulge'].fillna(0)
-    df.loc[:,'DNA_Bulge'] = df['DNA_Bulge'].fillna(0)
+    #df.loc[:, 'Aligned_Target_Sequence'] = df['Realigned_Target_Sequence'].astype('str').replace('none', np.nan)
+    df.loc[:,'Aligned_Target_Sequence'] = df.loc[:,'Realigned_Target_Sequence'].fillna(df['Target_Sequence'])
+    #df.loc[:,'RNA_Bulge'] = df['RNA_Bulge'].fillna(0)
+    #df.loc[:,'DNA_Bulge'] = df['DNA_Bulge'].fillna(0)
     df.loc[:,'Genomic Coordinate'] = df['Genomic Coordinate'].str.split('-',expand=True)[0] + df['Strand']
 
     dist = df.loc[:,['Site_Substitution_Number', 'RNA_Bulge', 'DNA_Bulge']].sum(1)
@@ -111,7 +122,7 @@ def parse_df(df,sample):
     df.insert(i+2,'Number of Replicates Sites found',1)
 
     x = (df.loc[:, 'Nuclease_Read_Count'] / df.loc[:, 'Nuclease_Read_Count'].sum()).round(3)
-    df.insert(i + 3,'Percent Total Reads',x.round(5) *100)
+    df.insert(i + 3,'Percent Total Reads',(x*100).round(5))
 
 
     i = list(df.columns).index('Site_Sequence')
@@ -132,43 +143,79 @@ def parse_df(df,sample):
 def join_replicates(sample1_df, sample2_df, suffixes):
     df = sample1_df.merge(sample2_df, on=['Genomic Coordinate'], how='outer',
                           suffixes=suffixes)
-    keep_cols = choose_cols(sample1_df)
 
-    for col in df.columns:
-        if "Read_Count" in col:
-            df.loc[:,col] = df[col].fillna(0)
-        if "Converted" in col:
-            df.loc[:,col] = df[col].fillna(0)
-        if "Noise" in col:
-            df.loc[:,col] = df[col].fillna(0)
+    # fill counts with 0 in sites that were not found in other rep
+    countcols = get_count_columns(df)
+    df.loc[:, countcols] = df[countcols].fillna(0)
 
 
-    for col in keep_cols[keep_cols.index( 'Site_Sequence'):]:
-        if "Converted" not in col:
-            if "Noise" not in col:
-                df.loc[:,col] = df[f'{col}{suffixes[0]}'].fillna(df[f'{col}{suffixes[1]}'])
-                df = df.drop(columns=[f'{col}{suffixes[0]}', f'{col}{suffixes[1]}'])
+    keep_cols = choose_cols(df)
+    for col in keep_cols[1:]:
+        if col not in countcols:
+            df.loc[:,col] = df[f'{col}{suffixes[0]}'].fillna(df[f'{col}{suffixes[1]}'])
+            df = df.drop(columns=[f'{col}{suffixes[0]}', f'{col}{suffixes[1]}'])
 
+    # recalc # of replicates, LFC and % reads
     nuclease_read_count_cols = [col for col in df.columns if "Nuclease_Read_Count" in col]
-    df.loc[:,'Number of Replicates Sites found'] = (df[nuclease_read_count_cols] > 0).sum(1)
-
+    df.loc[:, 'Number of Replicates Sites found'] = (df[nuclease_read_count_cols] > 0).sum(1)
 
     x = df.loc[:, nuclease_read_count_cols].sum(1) / df.loc[:, nuclease_read_count_cols].sum(1).sum()
-    df.loc[:,'Percent Total Reads'] = x.round(5) *100
+    df.loc[:,'Percent Total Reads'] = (x *100).round(2)
+
+    df.loc['LFC',:] =  LFC(df)
+
+    df = df.loc[:, keep_cols]
 
     return df
+def scatter_plot(x1,x2,name,figout):
+    x = np.log2(np.array(x1)+1)
+    y = np.log2(np.array(x2)+1)
 
+    pearR = np.corrcoef(x1, x2)[1, 0]
+    plt.figure(figsize=(4, 4))
+    plt.scatter(x[x * y>0], y[x * y>0],color = colors[3],label="rho= %s" % (round(pearR,3)))
+    plt.xticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)),[10,100,1000,10000,100000])
+    plt.yticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)),[10,100,1000,10000,100000])
+    plt.legend(loc=1)
+    plt.title(name)
+    #plt.show()
+    plt.savefig(figout, bbox_inches='tight')
+    plt.close()
+def vennplot_replicates(x1,x2,sample1,sample2,figout):
+    font_size = 8
+    x1, x2 =np.array(x1),np.array(x2)
+    Rep1_unique,Rep2_unique  = sum(x1>0),sum(x2 > 0)
+    shared = sum(x1 * x2 > 0)
+    ja= calc_jaccard(Rep1_unique,Rep2_unique,shared)
+    values = (Rep1_unique, Rep2_unique,shared)
 
+    plt.figure(figsize=(4, 4))
+    v =venn2(subsets = values,
+             set_labels=(sample1,sample2),
+             set_colors=(colors[1],colors[4]),alpha = 0.5)
+    for l in ["A","B"]:
+        v.get_label_by_id(l).set_fontsize(font_size)
+        v.get_label_by_id(l).set_y(0.6)
+        v.get_label_by_id(l).set_x(len(sample1)/100.0-0.4)
+
+    plt.annotate("% replicate rites overlap " + str(ja), xy=v.get_label_by_id('010').get_position() +
+                                           np.array([0, -0.5]), xytext=(-60, -30), ha='center',
+                 textcoords='offset points')
+    plt.savefig(figout, bbox_inches='tight')
+    plt.close()
+    #plt.show()
+    return ja
 
 def swarm_plot(joined_normalized, name, figout):
     sns.set_style('white')
     columns = [col for col in joined_normalized.columns if col.startswith('Nuclease_Read_Count')]
-    count_dict = joined_normalized.loc[:,joined_normalized.columns.str.startswith('Nuclease_Read_Count')].to_dict('list')
+    count_dict = joined_normalized.loc[:, joined_normalized.columns.str.startswith('Nuclease_Read_Count')].to_dict(
+        'list')
 
     # Finding the mean reading excluding 0 sites
     mean = []
     counts = np.array(list(count_dict.values()))
-    for i in range(len(counts[0,:])):
+    for i in range(len(counts[0, :])):
         count = counts[:,i]
         x = sum(count[count>0])
         mean.append(x/sum(count>0))
@@ -201,7 +248,7 @@ def swarm_plot(joined_normalized, name, figout):
         legend.set_title("")
     # plt.show()
     plt.savefig(figout)
-    plt.close(figout)
+    plt.close()
 
 def calc_jaccard(Rep1_unique,Rep2_unique,shared):
     total = Rep1_unique + Rep2_unique + shared
@@ -219,11 +266,13 @@ def create_pseudo_sample(counts):
         pseudo_sample.append(geo_mean(counts[i,:]))
     return np.array(pseudo_sample)
 
-def median_normalization(count_dict):
+def median_normalization(count_dict,scaling_factors):
     # https://divingintogeneticsandgenomics.com/post/details-in-centered-log-ratio-clr-normalization-for-cite-seq-protein-count-data/
-    normalized_data={}
-    scaling_factors = {}
+    '''
+    best method hwoever it cannot be applied to controls since there are too many zeros.
+    To circumvent this the control is normalized by aligned library size in order to have some sort of normalization
 
+    '''
     counts = np.array(list(count_dict.values())).T.astype(float)
     pseudo_sample = create_pseudo_sample(counts) # (log_cnt1,log_cnt2)
     mask = pseudo_sample > 0
@@ -231,104 +280,50 @@ def median_normalization(count_dict):
     pseudo_f = pseudo_sample[mask]
     norm_count = pseudo_f[:, None] / counts_f
     norm_count[np.isnan(norm_count)] = 0
-    size_factor = np.zeros(np.shape(norm_count[0,:]))
-    for i in range(norm_count.shape[1]):
-        x = norm_count[:,i]
+
+    for i, val in enumerate(scaling_factors['nuclease']):
+        x = norm_count[:, i]
         x = x[~np.isnan(x)]
-        size_factor[i] = np.median(x[x>0])
-    new_counts = counts * size_factor
+        scaling_factors['nuclease'][i] = np.median(x[x>0])
+
+    #size_factor = np.zeros(np.shape(norm_count[0,:]))
+    # for i in range(norm_count.shape[1]):
+    #     x = norm_count[:,i]
+    #     x = x[~np.isnan(x)]
+    #     size_factor[i] = np.median(x[x>0])
+    #new_counts = counts * size_factor
     #new_read_counts1 = [round(x / size_factor1, 0) for x in read_counts1]
     #new_read_counts2 = [round(x / size_factor2, 0) for x in read_counts2]
-    new_counts = new_counts.round(0)
-    c=0
-    for k in count_dict.keys():
-        scaling_factors[k] = size_factor[c]
-        normalized_data[k] = list(new_counts[:,c].astype('int'))
-        c+=1
-    return normalized_data, scaling_factors
+    # new_counts = new_counts.round(0)
+    # c=0
+    # for k in count_dict.keys():
+    #     scaling_factors[k] = size_factor[c]
+    #     normalized_data[k] = list(new_counts[:,c].astype('int'))
+    #     c+=1
+    return scaling_factors
 
-def rpm(count_dict,depths):
+def rpm(depths):
     # uses a total count scaling method
-
-
-    mean_depth = np.mean(depths)
+    mean_depth= np.mean(list(set(depths['nuclease']+depths['control'])))
 
     scaling_factors = {
-        sample: mean_depth / depths[i]
-        for i,sample in enumerate(list(count_dict.keys()))
+        k: mean_depth / v
+        for k,v in depths.items()
     }
 
-    normalized_data = {
-        sample: (np.array(counts) * scaling_factors[sample]).round(0)
-        for sample, counts in count_dict.items()
-    }
-    return normalized_data, scaling_factors
+    # do not allow to scale more than 20%
+    for k,vals in scaling_factors.items():
+        for i,v in enumerate(vals):
+            if v < 0.8:
+                scaling_factors[k][i] = 0.8
+            elif v > 1.2:
+                scaling_factors[k][i] = 1.2
+
+    return scaling_factors
 
 
-def scatter_plot(x1,x2,name,figout):
-    x = np.log2(np.array(x1)+1)
-    y = np.log2(np.array(x2)+1)
 
-    pearR = np.corrcoef(x1, x2)[1, 0]
-    plt.figure(figsize=(4, 4))
-    plt.scatter(x[x * y>0], y[x * y>0],color = colors[3],label="rho= %s" % (round(pearR,3)))
-    plt.xticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)),[10,100,1000,10000,100000])
-    plt.yticks(np.arange(np.log2(10), np.log2(100000), step=np.log2(10)),[10,100,1000,10000,100000])
-    plt.legend(loc=1)
-    plt.title(name)
-    #plt.show()
-    plt.savefig(figout, bbox_inches='tight')
-    plt.close(figout)
 
-def vennplot_replicates(x1,x2,sample1,sample2,figout):
-    font_size = 8
-    x1, x2 =np.array(x1),np.array(x2)
-    Rep1_unique,Rep2_unique  = sum(x1>0),sum(x2 > 0)
-    shared = sum(x1 * x2 > 0)
-    ja= calc_jaccard(Rep1_unique,Rep2_unique,shared)
-    values = (Rep1_unique, Rep2_unique,shared)
-
-    plt.figure(figsize=(4, 4))
-    v =venn2(subsets = values,
-             set_labels=(sample1,sample2),
-             set_colors=(colors[1],colors[4]),alpha = 0.5)
-    for l in ["A","B"]:
-        v.get_label_by_id(l).set_fontsize(font_size)
-        v.get_label_by_id(l).set_y(0.6)
-        v.get_label_by_id(l).set_x(len(sample1)/100.0-0.4)
-
-    plt.annotate("% replicate rites overlap " + str(ja), xy=v.get_label_by_id('010').get_position() +
-                                           np.array([0, -0.5]), xytext=(-60, -30), ha='center',
-                 textcoords='offset points')
-    plt.savefig(figout, bbox_inches='tight')
-    plt.close(figout)
-    #plt.show()
-    return ja
-
-def scale_all_counts(joined,scaling_factors,depths):
-    depths = np.array(depths)
-    cntl_scaling_factors = np.mean(np.array(depths[0])) / depths[1]
-    i =0
-    for sample,sf in scaling_factors.items():
-        ctl_sf = cntl_scaling_factors[i]
-        rep = sample.split("Count.")[-1]
-        joined[f'Nuclease_Base_Converted.{rep}'] = (joined[f'Nuclease_Base_Converted.{rep}'] * sf).round(3)
-        joined[f'Nuclease_Noise.{rep}'] =(joined[f'Nuclease_Noise.{rep}'] * sf).round(3)
-        joined[f'Control_Base_Converted.{rep}'] = (joined[f'Control_Base_Converted.{rep}'] * ctl_sf).round(3)
-        joined[f'Control_Noise.{rep}'] = (joined[f'Control_Noise.{rep}'] * ctl_sf).round(3)
-        i+=1
-    return joined
-
-def scale_control_counts(joined,norm_count_dict,depths):
-    # not ideal if using median norm for nuclease counts
-    depths = np.array(depths)
-    cntl_scaling_factors = np.mean(np.array(depths[0])) / depths[1]
-    i = 0
-    for sample in norm_count_dict.keys():
-         rep = sample.split("Count.")[-1]
-         joined[f'Control_Read_Count.{rep}'] = (joined[f'Control_Read_Count.{rep}'] * cntl_scaling_factors[i]).round(3)
-         i+=1
-    return  joined
 
 def LFC(df):
     '''
@@ -347,62 +342,77 @@ def clean_normalized(joined_normalized,read_threshold):
     # remove sites below threshold post normalization
     joined_normalized.loc[:, read_columns] = joined_normalized.loc[:,read_columns].applymap(
         lambda x: 0 if x and x < read_threshold else x)
-
     keep_rows = joined_normalized.loc[:, read_columns].sum(1) != 0
     joined_normalized = joined_normalized.loc[keep_rows, :].copy()
+
     joined_normalized.loc[:,'Number of Replicates Sites found'] = (joined_normalized.loc[:, read_columns] > 0).sum(1)
     joined_normalized.loc[:,'Percent Total Reads'] =joined_normalized.loc[:, read_columns].sum(1) / joined_normalized.loc[:, read_columns].sum(1).sum()
-    joined_normalized.loc[:, 'Percent Total Reads'] =  joined_normalized['Percent Total Reads'].round(5) *100
+    joined_normalized.loc[:, 'Percent Total Reads'] =  (joined_normalized['Percent Total Reads']*100).round(5)
     joined_normalized.loc[:, 'LFC'] = LFC(joined_normalized)
     keep_cols = choose_cols(joined_normalized)
     joined_normalized = joined_normalized.loc[:, keep_cols].copy()
-    joined_normalized['LFC FLAG'] = ""
-    joined_normalized.loc[joined_normalized['LFC'] < -3, 'LFC FLAG'] = 'LFC < -3'
+
+    idx = list(joined_normalized.columns).index('LFC')
+    joined_normalized.insert(idx, 'LFC FLAG',"")
+    joined_normalized.loc[joined_normalized['LFC'] < -1, 'LFC FLAG'] = 'LFC < -1'
+    joined_normalized.loc[joined_normalized['LFC'] < -2, 'LFC FLAG'] = 'LFC < -2'
+
     # make a simplified version
 
-    joined_normalized = joined_normalized.sort_values(['Percent Total Reads','LFC'],ascending=False)
-    joined_simplified_report = joined_normalized
+    joined_normalized = joined_normalized.sort_values(['LFC'],ascending=False)
+
+    joined_simplified_report = joined_normalized.copy()
+    countcols = list(set([x.split(".")[0] for x in get_count_columns(joined_normalized)]))
+    for c in countcols:
+        to_agg = joined_simplified_report.columns[ joined_simplified_report.columns.str.startswith(c)]
+        joined_simplified_report[f'{c}.mean'] = joined_simplified_report.loc[:, to_agg].mean(1).round(1)
+        joined_simplified_report = joined_simplified_report.drop(columns =to_agg )
+    joined_simplified_report = joined_simplified_report[choose_cols( joined_simplified_report)]
+
+    joined_simplified_report.insert(idx, 'LFC FLAG', "")
+    joined_simplified_report.loc[joined_simplified_report['LFC'] < -1, 'LFC FLAG'] = 'LFC < -1'
+    joined_simplified_report.loc[joined_simplified_report['LFC'] < -2, 'LFC FLAG'] = 'LFC < -2'
+
+    joined_normalized = joined_normalized.sort_values(['LFC'], ascending=False)
+
+
     return joined_normalized, joined_simplified_report
 
 
 def normalize(joined,pklfiles,normalization_method,read_threshold):
-    count_dict = joined.loc[:,joined.columns.str.startswith('Nuclease_Read_Count')].to_dict('list')
-    ## check if at least 5% of the sites are matching. if not then skip normalization:
-    pt = 1-sum([x.count(0) for x in count_dict.values()])/len(list(count_dict.values())[0])
-
-    scaling_factors = {}
-    scaling_factors =scaling_factors.fromkeys(count_dict,1.0)
 
     depths = get_read_depth(pklfiles)
+    countcols = get_count_columns(joined)
 
-    if pt < 0.05:
-        logger.info(f'Not enough overlapping sites to normalize {count_dict.keys()}')
-        logger.info(f'Min of 5% required overlap sites to normalize')
-        norm_count_dict = count_dict
-        try:
-            dont_keep, scaling_factors = rpm(count_dict, depths[0])
-            logger.info(f'Normalized by RPM instead.')
-        except:
-            logger.info(f'No normalization method used.')
+    ## check if at least 5% of the sites are matching. if not then skip normalization:
+    scaling_factors = {}
+    scaling_factors =scaling_factors.fromkeys(depths,[1.0]*len(depths['control']))
 
-    elif normalization_method == "median":
-        norm_count_dict, scaling_factors= median_normalization(count_dict)
-    elif normalization_method == "rpm":
-        depths = get_read_depth(pklfiles)
-        norm_count_dict, scaling_factors = rpm(count_dict, depths[0])
-    else:
-        norm_count_dict = count_dict
+    if normalization_method == "rpm" or normalization_method == "median":
+        scaling_factors = rpm(depths)
 
-    for k,v in norm_count_dict.items():
-        joined.loc[:, k] = v
+        if normalization_method == "median":
+            overlap = 1-(joined['Number of Replicates Sites found'] ==1).sum() / len(joined['Number of Replicates Sites found'])
 
-    ## try to normalize Noise and Edited cols
-    joined = scale_control_counts(joined,norm_count_dict,depths)
-    try:
-        joined = scale_all_counts(joined,scaling_factors,depths)
-    except:
-        pass
-    joined_normalized, simplified_report = clean_normalized(joined,read_threshold,)
+            if overlap > 0.05:
+                count_dict = joined.loc[:, joined.columns.str.startswith('Nuclease_Read_Count')].to_dict('list')
+                scaling_factors = median_normalization(count_dict, scaling_factors)
+            else:
+                logger.info(f'Not enough overlapping sites to use median normalization')
+                logger.info(f'Min of 5% overlapping sites to normalize with median ratio \n'
+                            f'using RPM instead')
+
+
+    samplenames = list(set([c.split('.')[1] for c in countcols]))
+    for col in countcols:
+        i = samplenames.index(col.split('.')[1])
+
+        if col.startswith('Control_'):
+            joined.loc[joined[col]>0, col]= (joined.loc[joined[col]>0, col] / scaling_factors['control'][i]).round(0)
+        else:
+            joined.loc[joined[col] > 0, col] = (joined.loc[joined[col] > 0, col] / scaling_factors['nuclease'][i]).round(0)
+
+    joined_normalized, simplified_report = clean_normalized(joined,read_threshold)
 
     return joined_normalized,simplified_report
 
@@ -417,8 +427,8 @@ def make_offtarget_dict(joined_normalized,subset):
         bulge_flag = True
         annot = ""
         target_seq = row['Target_Sequence'].replace("-", "")
-        realigned_target_seq = row['Target_site']
-        no_bulge_offtarget_sequence = row['Site_Sequence'].upper()
+        realigned_target_seq = row['Aligned_Target_Sequence']
+        offtarget_sequence = row['Aligned_Site_Sequence'].upper()
         if int(row['RNA_Bulge']) + int(row['DNA_Bulge']) == 0:
             bulge_flag = False
 
@@ -432,12 +442,12 @@ def make_offtarget_dict(joined_normalized,subset):
             pass
 
         total_seq += 1
-        offtargets.append({'seq': no_bulge_offtarget_sequence.strip(),
+        offtargets.append({'seq': offtarget_sequence,
                            'reads': offtarget_reads,
-                           'dist': int(row['RNA_Bulge']) + int(row['DNA_Bulge']) + int(row['Mismatches']),
+                           'dist': int(row['RNA_Bulge']) + int(row['DNA_Bulge']) + int(row['Site_Substitution_Number']),
                            'coord': str(coord),
                            'annot': str(annot),
-                           'num_mismatch': str(row['Mismatches']),
+                           'num_mismatch': str(row['Site_Substitution_Number']),
                            'target_seq': target_seq.strip(),
                            'realigned_target_seq': realigned_target_seq.strip(),
                            'bulge_flag': bulge_flag})
@@ -450,8 +460,8 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
     joined and normalizes replicates as indicated in manifest
     '''
     logger.info(f'Joining and normalizing {rep_group_name} replicates')
-    processed_outfile =outfolder + "/tables/"+ rep_group_name +'_joined.csv'
-    simplified_report_outfile = processed_outfile.replace('.csv','_simplified.csv')
+    processed_outfile =outfolder + "/tables/"+ rep_group_name +'_joined_LFC.csv'
+    simplified_report_outfile = processed_outfile.replace('.csv','_joined_LFC_aggregated.csv')
     swarm_plot_out = outfolder + "/visualization/"+ rep_group_name + "_postprocess_swarmplot.png"
 
     first_file = True
@@ -479,7 +489,8 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
     swarm_plot(swarmplot_df , rep_group_name, swarm_plot_out)
 
     for sample in replicates['sample_name']:
-        offtargets, target_seq, total_seq = make_offtarget_dict(simplified_report,subset='Nuclease_Read_Count.' + sample)
+        alignment_plot_df = joined_normalized.loc[joined_normalized['LFC FLAG']=="", ].copy()
+        offtargets, target_seq, total_seq = make_offtarget_dict(alignment_plot_df ,subset='Nuclease_Read_Count.' + sample)
         alignment_plot = outfolder +"/visualization/"+ sample.replace(" ", "_") + "_postprocess_alignment_plot.svg"
         draw_plot(target_seq, offtargets, total_seq, outfile=alignment_plot, title=sample, PAM=PAM)
 
@@ -487,8 +498,8 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
         sample_1= replicates['sample_name'][i]  #'Nuclease_Read_Count.' + sample
         for j in range(1,len(replicates['sample_name'])):
             sample_2 = replicates['sample_name'][j]
-            x1, x2 = list(simplified_report[f'Nuclease_Read_Count.{sample_1}']), list(
-                simplified_report[f'Nuclease_Read_Count.{sample_2}'])
+            x1, x2 = list(joined_normalized[f'Nuclease_Read_Count.{sample_1}']), list(
+                joined_normalized[f'Nuclease_Read_Count.{sample_2}'])
             scatter_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
             venn_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_venn.png"
 

@@ -1,10 +1,38 @@
 import os
 import logging
+import pickle
 
 
 logger = logging.getLogger('root')
 logger.propagate = False
 
+global metrics
+metrics = ['total_reads',
+           'reads_tn5_filtered',
+           'preprocessed_read_remaining',
+           'reads_aligned',
+           'reads_mapped_outie - derived from circles',
+           'total_reads_mapped_inner - derived from linear',
+           'mate mapped to different chromosome',
+           'average read length',
+           'average mapping quality']
+
+
+def check_file(file):
+    if os.path.isfile(file):
+        return True
+    else:
+        logger.info(f"{file} is not your directory")
+        return False
+
+def get_read_depth(pklfile):
+    if check_file(file):
+        with open(file, 'rb') as f:
+            data = pickle.load(f)
+    else:
+        logger.info(f'Total read depth for {file} could not be found for tpm normalization')
+        logger.info('Running without normalizing')
+    return data
 
 def write_qc(qc_file,preprocessed_logfile,coverage_stat_file):
     #for sample in c.parameters['samples']:

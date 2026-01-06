@@ -67,6 +67,7 @@ class CircleSeq:
             # initialize some default input file names for annotation files
             for sample in self.parameters['samples']:
                 self.annotation_file[sample] = f"{self.output_dir[ 'raw_results/tables']}/{sample}_annotated_results.csv"
+
         except Exception as e:
             logger.error('Incorrect or malformed manifest file. Please ensure your manifest contains all required fields.')
             sys.exit()

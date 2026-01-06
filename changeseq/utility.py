@@ -116,9 +116,9 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
     columns = manifest_df.columns
     if 'replicate_group_name' in columns:
         for name in set(manifest_df['replicate_group_name']):
-            replicate_samples = manifest_df.loc[manifest_df['replicate_group_name'] == name, ['sample_name', 'target']].to_dict('list')
-
-            return_dict['replicates'][name] = replicate_samples
+            if name != None or name != "":
+                replicate_samples = manifest_df.loc[manifest_df['replicate_group_name'] == name, ['sample_name', 'target']].to_dict('list')
+                return_dict['replicates'][name] = replicate_samples
 
     for i in range(num_samples):
         #sample_basename = [x[:x.find('_001.f') - 2] for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x][0]
