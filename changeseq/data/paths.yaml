@@ -1,0 +1,5 @@
+ftps:
+  refseq_genomic: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/GCF_000001405.40_GRCh38.p14_genomic.gff.gz
+  refseq_txt: https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ncbiRefSeq.txt.gz
+
+refseq: "ncbiRefSeq.bed"

@@ -8,7 +8,8 @@ import logging
 import pandas as pd
 import subprocess
 import sys
-from collections import OrderedDict
+from pathlib import Path
+
 """
 FASTQ generator function from umi package
 """
@@ -55,6 +56,7 @@ def reverseComplement(sequence):
 
 
 def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
+    #load default parameters
     sample_manifest = f'{analysis_folder}/{os.path.basename(sample_manifest)}'
     yaml_fname = sample_manifest.replace(".csv", ".yaml")
     default_yaml = os.path.dirname(os.path.realpath(validation.__file__)) + "/default.yaml"
@@ -64,9 +66,9 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
 
     validation.exists(filepath=sample_manifest)
 
-
+    # load sample manifest
     manifest_df = pd.read_csv(sample_manifest)
-    if settings != 'default':
+    if settings != 'default': # if user defined settings.csv added then update
         settings = f'{analysis_folder}/{os.path.basename(settings)}'
         logger.info(f"custom settings loading from file {settings}")
         settings_dict = pd.read_csv(settings, names=['parameter', 'setting']).set_index('parameter').to_dict()['setting']
@@ -77,7 +79,7 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
     return_dict = {}
     for param,default_s in default.items():
 
-        if param in settings_dict.keys():
+        if param in settings_dict.keys(): # if user defined settings.csv added then update
             try:
                 return_dict[param] = int(settings_dict[param]) if type(settings_dict[param]) != bool else settings_dict[param]
             except Exception:
@@ -120,10 +122,17 @@ def get_parameters(analysis_folder,fq_dir,sample_manifest,settings='default'):
                 replicate_samples = manifest_df.loc[manifest_df['replicate_group_name'] == name, ['sample_name', 'target']].to_dict('list')
                 return_dict['replicates'][name] = replicate_samples
 
+    ## iteerate through samples to match controls
     for i in range(num_samples):
         #sample_basename = [x[:x.find('_001.f') - 2] for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x][0]
-        sample_basename = [x for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x if '_R1_0' in x][0]
-        control_basename = [x for x in fq_files if manifest_df.iloc[i]['control_sequencing_sample_name'] in x if '_R1_0' in x][0]
+        try:
+            sample_basename = [x for x in fq_files if manifest_df.iloc[i]['sequencing_sample_name'] in x if '_R1_0' in x][0]
+            control_basename = [x for x in fq_files if manifest_df.iloc[i]['control_sequencing_sample_name'] in x if '_R1_0' in x][0]
+        except IndexError:
+            logger.error(f"ERROR; no sample named {manifest_df.iloc[i]['sequencing_sample_name']} not in {fq_dir}")
+            logger.error("OR")
+            logger.error(f"ERROR; no sample named {manifest_df.iloc[i]['control_sequencing_sample_name']} not in {fq_dir}")
+            sys.exit()
         if len(sample_basename)==0:
             logger.error('fastq file for {0} is not detected'.format(manifest_df.iloc[i]['sequencing_sample_name']))
             sys.exit()
@@ -182,6 +191,33 @@ def make_control_copy(representative_control_file,control_outfile):
     subprocess.check_call(cmd, shell=True)
     logger.info('done.')
 
+def extract_paths(config_path):
+    with open(str(config_path), 'r') as config_handle:
+        config_dict= yaml.safe_load(config_handle)
+    return config_dict
 
+def write_yaml_to_file(py_obj, filename: str):
+    with open(f'{filename}', 'w', ) as f:
+        yaml.safe_dump(py_obj, f, sort_keys=False, default_style='"')
+    print(f'--> Configuration file created: {filename}')
 
+def get_paths(p_dir):
+    paths_file = Path(p_dir).joinpath('data/paths.yaml')
+    paths_dict= extract_paths(paths_file)
+    if not os.path.isabs(paths_dict['refseq']):
+        file_path = os.path.join(p_dir, f'/data/{paths_dict["refseq"]}')
+        paths_dict['refseq'] = file_path
+        write_yaml_to_file(paths_dict, paths_file)
+
+    return paths_dict
+
+def set_export(outdir: str):
+    if os.path.exists(outdir):
+        pass
+        # print(f'--> Skipping directory creation: {outdir}')
+    # Create outdir only if it doesn't exist
+    if not os.path.exists(outdir):
+        print(f'Directory created on: {outdir}')
+        Path(outdir).mkdir(parents=True, exist_ok=True)
+    return outdir
 

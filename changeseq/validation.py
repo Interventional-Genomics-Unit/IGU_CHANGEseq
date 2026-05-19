@@ -79,18 +79,18 @@ def checkIfValidSamples(samples):
     #     sys.exit()
 
     if len(samples.keys()) == 0:
-        logger.error('No samples defined')
+        logger.info('No samples defined')
         sys.exit()
 
     for sample in samples:
         if 'read1' not in samples[sample] or 'read2' not in samples[sample]:
-            logger.error('read1 and read2 must be specified for {0} sample'.format(sample))
+            logger.info(f'read1 and read2 must be specified for {sample} sample')
             sys.exit()
         if 'controlread1' not in samples[sample] or 'controlread2' not in samples[sample]:
-            logger.error('controlread1 and controlread2 must be specified for {0} sample'.format(sample))
+            logger.info(f'controlread1 and controlread2 must be specified for {sample} sample')
             sys.exit()
         if 'target' not in samples[sample]:
-            logger.error('target sequence must be specified for {0} sample'.format(sample))
+            logger.info('target sequence must be specified for {0} sample'.format(sample))
             sys.exit()
 
 def validateManifest(manifest_data):
@@ -100,10 +100,11 @@ def validateManifest(manifest_data):
 
     for field in fields:
         if field not in manifest_data.keys():
-            logger.error('"{0}" field must be specified in manifest'.format(field))
+            logger.info(f'{field} field must be specified in manifest')
             missing_fields = True
 
     if missing_fields:
+        logger.info(f'{fields} field must be specified in manifest')
         sys.exit()
 
     # Now validate each field
