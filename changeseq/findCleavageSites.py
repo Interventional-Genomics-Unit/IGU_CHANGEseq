@@ -194,13 +194,13 @@ def tabulate_start_positions(bam,mapq_threshold,
 			PE_read_count += 1
 			for first_read in read1_list:
 				for second_read in read2_list:
+					noise_flag = True
 					first_read_position,second_read_position,flag = None, None,None
 					if first_read.reference_name == second_read.reference_name:
 						flag, overlap_bp, first_read_position,second_read_position = get_start_d(first_read, second_read)
 
 						if flag and abs(overlap_bp) <= gap_threshold:
 							if not first_read.flag & 0x400 and not second_read.flag & 0x400:
-								noise_flag = False
 								not_noise_count += 1
 								ga[HTSeq.GenomicPosition(first_read.reference_name, first_read_position)] += 1
 								ga[HTSeq.GenomicPosition(first_read.reference_name, second_read_position)] += 1
@@ -252,12 +252,20 @@ def find_windows(ga_windows, window_size):
 """ Find actual sequences of potential off-target sites
 """
 
-def output_alignments(narrow_ga, ga_windows, ga_narrow_windows_noise,control_narrow_ga,
-					  control_ga_narrow_windows_noise,reference_genome,
+def output_alignments(narrow_ga,
+					  ga_windows,
+					  ga_narrow_windows_noise,
+					  control_narrow_ga,
+					  control_ga_narrow_windows_noise,
+					  reference_genome,
 					  target_sequence,
 					  target_name,
 					  bam_filename,
-					  edist_threshold,mismatch_threshold,bulge_threshold, search_radius, pkl_data,out):
+					  edist_threshold,
+					  mismatch_threshold,
+					  bulge_threshold,
+					  search_radius,
+					  pkl_data,out):
 	pkl_out = '{0}_total_counts.pkl'.format(out)
 	outfile_matched = '{0}_identified_matched.txt'.format(out)
 	outfile_unmatched = '{0}_identified_unmatched.txt'.format(out)
@@ -658,6 +666,7 @@ def compare(ref, bam, control, targetsite, search_radius, windowsize, mapq_thres
 			if value:
 				combined_ga[iv] = 1
 
+		logger.info("Finished combined_ga")
 		for iv, value in combined_ga.steps():
 			if value:
 				for position in iv.range(step=1):
