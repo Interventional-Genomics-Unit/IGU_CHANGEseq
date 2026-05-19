@@ -7,13 +7,20 @@ import logging
 logger = logging.getLogger('root')
 logger.propagate = False
 
-## by T.Hudson
+########
+###      Transcript Class is used to compute/retrieve transcript information based on a list of coordinates
+###      1: Load list of genomic coordinates and ncbiRefSeq.bed file path
+###      2: Call upon any of these coordinates using the NCBI transcript ID or coordinates
+###         to retreive  gene names, features, reading frame, feature positions and transcript sequence
+###         Created by T.Hudson
+########
 
 class Transcript:
 
 
     tx_lib = {}
     coord2tid = {}
+    secondary_coord2tid = {}
     labels = ['chrom', 'txStart', 'txEnd', 'strand', 'tid', 'eid', 'name',
               'cdsStart', 'cdsEnd', 'exonStarts', 'exonEnds', 'exonFrames']
 
@@ -65,9 +72,12 @@ class Transcript:
 
         for coord in snvcoords:
             coord_field = coord.split(':')
-            chrom = coord_field[0]
+            chrom = coord_field[0] if 'chr' in coord_field[0] else 'chr' + coord_field[0]
             start = coord_field[1].split('-')[0]
-            end = coord_field[1].split('-')[1]
+            try:
+                end = coord_field[1].split('-')[1]
+            except IndexError:
+                end = str(int(start) + 1)
             line = "\t".join([chrom, start, end])
             bed_data += line + "\n"
 
@@ -109,8 +119,6 @@ class Transcript:
             else:
                 logging.error(f"Error during bedtools closest command:\n {stderr}")
 
-
-        if bedtools_out != '':
             bed_entries = bedtools_out.split('\n')[:-1]
 
             for bed_entry in bed_entries:

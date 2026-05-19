@@ -94,7 +94,7 @@ class CircleSeq:
             self.parameters['samples'][sample]['read1'] = sample_read1_outfile
             self.parameters['samples'][sample]['read2'] = sample_read2_outfile
 
-            cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', "control_"+ sample + 'trim_log.txt')
+            cutadapt_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed', "control_"+ sample + '_trim_log.txt')
             control_read1_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
                                                  "control_"+sample + '_R1_processesed.fastq.gz')
             control_read2_outfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
@@ -170,57 +170,57 @@ class CircleSeq:
                 logger.error(traceback.format_exc())
                 quit()
 
-            try:
-                self.aligned = {}
-                self.aligned_sorted = {}
-                for sample in self.parameters['samples']:
+        try:
+            self.aligned = {}
+            self.aligned_sorted = {}
+            for sample in self.parameters['samples']:
 
-                    sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '.sam')
-                    control_sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned','control_' + sample + '.sam')
+                sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '.sam')
+                control_sample_alignment_path = os.path.join(self.parameters["analysis_folder"], 'aligned','control_' + sample + '.sam')
 
-                    if self.parameters['merged_analysis']:
-                        read1 = os.path.join(self.parameters["analysis_folder"], 'fastq', sample + '_merged.fastq.gz')
-                        read2 = ""
-                        control_read1 = os.path.join(self.parameters["analysis_folder"], 'fastq', 'control_' + sample + '_merged.fastq.gz')
-                        control_read2 = ""
-                    else:
-                        read1 =  self.parameters['samples'][sample]["read1"]
-                        read2 = self.parameters['samples'][sample]["read2"]
-                        control_read1 = self.parameters['samples'][sample]['controlread1']
-                        control_read2 =self.parameters['samples'][sample]['controlread2']
+                if self.parameters['merged_analysis']:
+                    read1 = os.path.join(self.parameters["analysis_folder"], 'fastq', sample + '_merged.fastq.gz')
+                    read2 = ""
+                    control_read1 = os.path.join(self.parameters["analysis_folder"], 'fastq', 'control_' + sample + '_merged.fastq.gz')
+                    control_read2 = ""
+                else:
+                    read1 =  self.parameters['samples'][sample]["read1"]
+                    read2 = self.parameters['samples'][sample]["read2"]
+                    control_read1 = self.parameters['samples'][sample]['controlread1']
+                    control_read2 =self.parameters['samples'][sample]['controlread2']
 
-                    alignReads(sample_name = sample,
-                               BWA_path=self.parameters['bwa'],
-                               HG19_path=self.parameters['reference_genome'],
-                               read1 = read1,
-                               read2 = read2,
-                               outfile = sample_alignment_path)
+                alignReads(sample_name = sample,
+                           BWA_path=self.parameters['bwa'],
+                           HG19_path=self.parameters['reference_genome'],
+                           read1 = read1,
+                           read2 = read2,
+                           outfile = sample_alignment_path)
 
-                    for ext in [".bam","_sorted.bam", "_sorted.bam.bai"]:
-                        run_control_flag = check_control_exists(sample=sample,
-                                                                representative_control=self.representative_controls[
-                                                                    sample],
-                                                                control_outfile=control_sample_alignment_path.replace(
-                                                                    ".sam", ext))
-                        if run_control_flag:
+                for ext in [".bam","_sorted.bam", "_sorted.bam.bai"]:
+                    run_control_flag = check_control_exists(sample=sample,
+                                                            representative_control=self.representative_controls[
+                                                                sample],
+                                                            control_outfile=control_sample_alignment_path.replace(
+                                                                ".sam", ext))
+                    if run_control_flag:
 
-                            alignReads(sample_name='control_' + sample,
-                                       BWA_path=self.parameters['bwa'],
-                                       HG19_path=self.parameters['reference_genome'],
-                                       read1=control_read1,
-                                       read2=control_read2,
-                                       outfile=sample_alignment_path)
-                            break
-                    self.aligned[sample] = sample_alignment_path
-                    self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_sorted.bam')
-                    self.findCleavageSites_input_bam[sample] = [sample_alignment_path.replace(".sam","_sorted.bam"),
-                                                                control_sample_alignment_path.replace(".sam","_sorted.bam")]
-                    logger.info('Finished aligning reads.')
+                        alignReads(sample_name='control_' + sample,
+                                   BWA_path=self.parameters['bwa'],
+                                   HG19_path=self.parameters['reference_genome'],
+                                   read1=control_read1,
+                                   read2=control_read2,
+                                   outfile=sample_alignment_path)
+                        break
+                self.aligned[sample] = sample_alignment_path
+                self.aligned_sorted[sample] = os.path.join(self.parameters["analysis_folder"], 'aligned', sample + '_sorted.bam')
+                self.findCleavageSites_input_bam[sample] = [sample_alignment_path.replace(".sam","_sorted.bam"),
+                                                            control_sample_alignment_path.replace(".sam","_sorted.bam")]
+                logger.info('Finished aligning reads.')
 
-            except Exception as e:
-                logger.error('Error aligning')
-                logger.error(traceback.format_exc())
-                quit()
+        except Exception as e:
+            logger.error('Error aligning')
+            logger.error(traceback.format_exc())
+            quit()
 
     def findCleavageSites(self):
 
@@ -320,53 +320,29 @@ class CircleSeq:
                             read_threshold = int(self.parameters['read_threshold']), PAM=self.parameters["PAM"])
 
 
-    def QC(self):
+    def QC(self,coverage=False):
         logger.info('Starting QC')
-            # try:
-                # for sample in self.parameters['samples']:
-
-                # logger.info('Running fastq quality and adapter analysis for {0}'.format(sample))
-                # fastqc_logfile = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '.html')
-                #
-                # fastqQC(self.parameters['samples'][sample]['read1'],
-                #         self.parameters['samples'][sample]['read2'],
-                #         fastqc_logfile)
-
-            # except Exception as e:
-            #logger.error('Error with Fastqc')
-
-        try:
-            for sample in self.parameters['samples']:
-
-                script_path = p_dir + "/QC_matched_alignment.sh"
-                logger.info('Running alignment coverage QC for {0}'.format(sample))
-
-                coverage_command = f'sh {script_path} {sample} {"control_" + sample} {self.parameters["analysis_folder"]}'
-
-                logger.info(coverage_command)
-                subprocess.check_call(coverage_command, shell=True)
-                logger.info('OT Coverage for {0} completed.'.format(sample))
-        except Exception as e:
-            logger.error('Error with alignment coverage QC ')
-            logger.error('skipping....')
-
-        try:
-            for sample in self.parameters['samples']:
-                logger.info('Running  report  for {0}'.format(sample))
-                preprocessed_logfile =  os.path.join(self.parameters["analysis_folder"], 'preprocessed', sample + '_trim_log.txt')
-                coverage_stat_file  = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_aligned_stats.txt')
-                qc_file = os.path.join(self.parameters["analysis_folder"], 'qc', sample + '_qc_report.txt')
-                write_qc(qc_file, preprocessed_logfile, coverage_stat_file)
-
-                preprocessed_logfile =  os.path.join(self.parameters["analysis_folder"], 'preprocessed', 'control_' + sample + '_trim_log.txt')
-                coverage_stat_file  = os.path.join(self.parameters["analysis_folder"], 'qc', 'control_' + sample + '_aligned_stats.txt')
-                qc_file = os.path.join(self.parameters["analysis_folder"], 'qc', 'control_' + sample + '_qc_report.txt')
-                write_qc(qc_file, preprocessed_logfile, coverage_stat_file)
+        for sample in self.parameters['samples']:
+            for sample_name in ['control_'+sample,sample]:
+                preprocessed_logfile = os.path.join(self.parameters["analysis_folder"], 'preprocessed',
+                                                    sample_name + '_trim_log.txt')
+                coverage_stat_file = os.path.join(self.parameters["analysis_folder"], 'qc',
+                                                  sample_name + '_aligned_stats.txt')
+                qc_file = os.path.join(self.parameters["analysis_folder"], 'qc', sample_name + '_qc_report.txt')
 
 
-        except Exception as e:
-            logger.error('Error with QC report')
+                if coverage and 'control_' not in sample_name:
+                    script_path = p_dir + "/QC_matched_alignment.sh"
+                    logger.info('Running alignment coverage QC for {0}'.format(sample))
 
+                    coverage_command = f'sh {script_path} {sample} {"control_" + sample} {self.parameters["analysis_folder"]}'
+
+                    logger.info(coverage_command)
+                    subprocess.check_call(coverage_command, shell=True)
+                    logger.info('OT Coverage for {0} completed.'.format(sample))
+
+            logger.info('Running  report  for {0}'.format(sample))
+            write_qc(qc_file, preprocessed_logfile=preprocessed_logfile , coverage_stat_file=coverage_stat_file)
 
     def callVariants(self):
 
@@ -492,7 +468,7 @@ def parse_args():
     align_parser.add_argument('--sample', '-s', help='Specify sample to process (default is all)', default='all')
 
     data_parser = subparsers.add_parser('makefiles', help='Combine and normalize replicates, produces vizualations')
-    data_parser.add_argument('--outdir', '-o',help='Specify the final annnotation table location. Default is changeseq directory',default=os.path.dirname(os.path.realpath(__file__)) + "/data/")
+    data_parser.add_argument('--outdir', '-o',help='Specify the final annotation table location. Default is changeseq directory',default=os.path.dirname(os.path.realpath(__file__)) + "/data/")
     data_parser.add_argument('--ftp_path', '-f', help='RefSeq FTP Path. Must be in refseq.txt format', default="https://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/ncbiRefSeq.txt.gz")
     data_parser.add_argument('--reset_output', '-r', help='Change path changeseq uses for stored annotation file',default=False)
 
@@ -581,9 +557,10 @@ def main():
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.processReads()
+        c.QC(coverage=False)
         c.alignReads()
-        c.QC()
         c.findCleavageSites()
+        c.QC(coverage=True)
         c.addAnnotations()
         c.visualize()
         c.analyze()
@@ -600,8 +577,8 @@ def main():
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.alignReads()
-        c.QC()
         c.findCleavageSites()
+        c.QC(coverage=True)
         c.addAnnotations()
         c.visualize()
         c.analyze()
@@ -609,15 +586,16 @@ def main():
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.findCleavageSites()
+        c.QC(coverage=True)
         c.addAnnotations()
         c.visualize()
+        c.analyze()
     elif args.command == 'visualize':
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
         c.addAnnotations()
         c.visualize()
         c.analyze()
-        c.QC()
     elif args.command == 'analyze':
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
@@ -629,7 +607,7 @@ def main():
     elif args.command == 'qc':
         c = CircleSeq()
         c.parseManifest(args.analysis_folder,args.raw_fastq_folder,args.manifest,args.settings, args.base_editing ,args.sample)
-        c.QC()
+        c.QC(coverage=True)
     elif args.command == 'makefiles':
         from make_annotation_table import makefiles
         makefiles(args.ftp_path,args.outdir,args.reset_output,p_dir)
