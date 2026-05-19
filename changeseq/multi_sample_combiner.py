@@ -87,7 +87,7 @@ def choose_cols(df):
 
     keep_cols += [x for x in df.columns if 'Converted' in x or 'Noise' in x]
 
-    if 'gnomAD.constraint' in df.columns:
+    if df.columns.str.contains('gnomAD.constraint').sum()>0:
         keep_cols += ['gnomAD.constraint', 'HPA.disease_involvement', 'COSMICS.cancer_role',
                       'COSMICS.tier']
 
@@ -332,30 +332,28 @@ def LFC(df):
     '''
     alpha = 1
     identified = df.loc[:,df.columns.str.startswith("Nuclease_Read_Count")].sum(1) + alpha
-    noise = df.loc[:,df.columns.str.startswith("Nuclease_Noise")].sum(1) +alpha
-    lfc = np.log2(identified / noise).round(4)
+    noise = df.loc[:,df.columns.str.startswith("Control_Read_Count")].sum(1) +alpha
+    lfc = np.log2(identified) -np.log2(noise)
     return lfc
 
 def clean_normalized(joined_normalized,read_threshold):
     read_columns = joined_normalized.columns.str.startswith('Nuclease_Read_Count')
 
     # remove sites below threshold post normalization
-    joined_normalized.loc[:, read_columns] = joined_normalized.loc[:,read_columns].applymap(
-        lambda x: 0 if x and x < read_threshold else x)
+    joined_normalized.loc[:, read_columns] = joined_normalized.loc[:,read_columns].applymap(lambda x: 0 if x and x < read_threshold else x)
     keep_rows = joined_normalized.loc[:, read_columns].sum(1) != 0
     joined_normalized = joined_normalized.loc[keep_rows, :].copy()
 
     joined_normalized.loc[:,'Number of Replicates Sites found'] = (joined_normalized.loc[:, read_columns] > 0).sum(1)
     joined_normalized.loc[:,'Percent Total Reads'] =joined_normalized.loc[:, read_columns].sum(1) / joined_normalized.loc[:, read_columns].sum(1).sum()
     joined_normalized.loc[:, 'Percent Total Reads'] =  (joined_normalized['Percent Total Reads']*100).round(5)
-    joined_normalized.loc[:, 'LFC'] = LFC(joined_normalized)
     keep_cols = choose_cols(joined_normalized)
     joined_normalized = joined_normalized.loc[:, keep_cols].copy()
 
     idx = list(joined_normalized.columns).index('LFC')
+    joined_normalized.loc[:, 'LFC'] = LFC(joined_normalized)
     joined_normalized.insert(idx, 'LFC FLAG',"")
-    joined_normalized.loc[joined_normalized['LFC'] < -1, 'LFC FLAG'] = 'LFC < -1'
-    joined_normalized.loc[joined_normalized['LFC'] < -2, 'LFC FLAG'] = 'LFC < -2'
+    joined_normalized.loc[joined_normalized['LFC'] < 0, 'LFC FLAG'] = 'LFC < 0'
 
     # make a simplified version
 
@@ -370,8 +368,8 @@ def clean_normalized(joined_normalized,read_threshold):
     joined_simplified_report = joined_simplified_report[choose_cols( joined_simplified_report)]
 
     joined_simplified_report.insert(idx, 'LFC FLAG', "")
-    joined_simplified_report.loc[joined_simplified_report['LFC'] < -1, 'LFC FLAG'] = 'LFC < -1'
-    joined_simplified_report.loc[joined_simplified_report['LFC'] < -2, 'LFC FLAG'] = 'LFC < -2'
+    joined_simplified_report.loc[joined_simplified_report['LFC'] < 0, 'LFC FLAG'] = 'LFC < 0'
+
 
     joined_normalized = joined_normalized.sort_values(['LFC'], ascending=False)
 
@@ -383,6 +381,7 @@ def normalize(joined,pklfiles,normalization_method,read_threshold):
 
     depths = get_read_depth(pklfiles)
     countcols = get_count_columns(joined)
+    rep_flag =  len([1 for x in countcols if "." in x]) == len(countcols)
 
     ## check if at least 5% of the sites are matching. if not then skip normalization:
     scaling_factors = {}
@@ -403,9 +402,12 @@ def normalize(joined,pklfiles,normalization_method,read_threshold):
                             f'using RPM instead')
 
 
-    samplenames = list(set([c.split('.')[1] for c in countcols]))
+    samplenames = list(set([c.split('.')[1] for c in countcols if 'Nuclease_Read_Count' in c]))
     for col in countcols:
-        i = samplenames.index(col.split('.')[1])
+        if rep_flag:
+            i = samplenames.index(col.split('.')[1])
+        else:
+            i =0
 
         if col.startswith('Control_'):
             joined.loc[joined[col]>0, col]= (joined.loc[joined[col]>0, col] / scaling_factors['control'][i]).round(0)
@@ -465,6 +467,7 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
     swarm_plot_out = outfolder + "/visualization/"+ rep_group_name + "_postprocess_swarmplot.png"
 
     first_file = True
+    has_reps = False
     for i,infile in enumerate(infiles):
         sample = replicates['sample_name'][i]
         df = pd.read_csv(infile)
@@ -475,6 +478,7 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
             previous_suffix = '.' + sample
             first_file = False
         else:
+            has_reps = True
             suffix = '.' +sample
             joined = join_replicates(joined, df, suffixes = [previous_suffix,suffix])
             previous_suffix = suffix
@@ -485,26 +489,27 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
     simplified_report.to_csv(simplified_report_outfile, index = False)
 
     ## plotting
-    swarmplot_df = joined_normalized.loc[joined_normalized['LFC FLAG']=="", ].copy()
-    swarm_plot(swarmplot_df , rep_group_name, swarm_plot_out)
+    if has_reps:
+        swarmplot_df = joined_normalized.loc[joined_normalized['LFC FLAG']=="", ].copy()
+        swarm_plot(swarmplot_df , rep_group_name, swarm_plot_out)
 
     for sample in replicates['sample_name']:
         alignment_plot_df = joined_normalized.loc[joined_normalized['LFC FLAG']=="", ].copy()
         offtargets, target_seq, total_seq = make_offtarget_dict(alignment_plot_df ,subset='Nuclease_Read_Count.' + sample)
         alignment_plot = outfolder +"/visualization/"+ sample.replace(" ", "_") + "_postprocess_alignment_plot.svg"
         draw_plot(target_seq, offtargets, total_seq, outfile=alignment_plot, title=sample, PAM=PAM)
+    if has_reps:
+        for i in range(len(replicates['sample_name'])-1):
+            sample_1= replicates['sample_name'][i]  #'Nuclease_Read_Count.' + sample
+            for j in range(1,len(replicates['sample_name'])):
+                sample_2 = replicates['sample_name'][j]
+                x1, x2 = list(joined_normalized.loc[joined_normalized['LFC FLAG']=="",f'Nuclease_Read_Count.{sample_1}']), list(
+                    joined_normalized[joined_normalized['LFC FLAG']=="",f'Nuclease_Read_Count.{sample_2}'])
+                scatter_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
+                venn_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_venn.png"
 
-    for i in range(len(replicates['sample_name'])-1):
-        sample_1= replicates['sample_name'][i]  #'Nuclease_Read_Count.' + sample
-        for j in range(1,len(replicates['sample_name'])):
-            sample_2 = replicates['sample_name'][j]
-            x1, x2 = list(joined_normalized[f'Nuclease_Read_Count.{sample_1}']), list(
-                joined_normalized[f'Nuclease_Read_Count.{sample_2}'])
-            scatter_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
-            venn_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_venn.png"
-
-            scatter_plot(x1, x2,f"{sample_1} & {sample_2}", scatter_out)
-            sim = vennplot_replicates(x1,x2,sample_1, sample_2, venn_out)
+                scatter_plot(x1, x2,f"{sample_1} & {sample_2}", scatter_out)
+                sim = vennplot_replicates(x1,x2,sample_1, sample_2, venn_out)
 
 
 def parse_args():
