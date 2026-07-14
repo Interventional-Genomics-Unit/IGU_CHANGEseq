@@ -504,7 +504,7 @@ def process_results(rep_group_name,replicates,infiles,pklfiles,outfolder, normal
             for j in range(1,len(replicates['sample_name'])):
                 sample_2 = replicates['sample_name'][j]
                 x1, x2 = list(joined_normalized.loc[joined_normalized['LFC FLAG']=="",f'Nuclease_Read_Count.{sample_1}']), list(
-                    joined_normalized[joined_normalized['LFC FLAG']=="",f'Nuclease_Read_Count.{sample_2}'])
+                    joined_normalized.loc[joined_normalized['LFC FLAG']=="",f'Nuclease_Read_Count.{sample_2}'])
                 scatter_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_scatterplot.png"
                 venn_out = f"{outfolder}/visualization/{sample_1}_&_{sample_2}_postprocess_venn.png"
 
